@@ -16,7 +16,8 @@ body{margin:0;min-height:100dvh;background:var(--bg);color:var(--tx);
 button{font-family:inherit;color:var(--tx);background:none;border:none;cursor:pointer}
 
 #aurora{position:fixed;inset:0;z-index:0;pointer-events:none;opacity:.2;transition:opacity 1.4s}
-#aurora div{position:absolute;border-radius:50%;filter:blur(90px);transition:background 2.2s}
+#aurora{contain:layout paint}
+#aurora div{position:absolute;border-radius:50%;filter:blur(70px);transition:background 2.2s}
 #a1{width:78vw;height:78vw;left:-20vw;top:-30vw;background:hsl(var(--hue) 62% 26%)}
 #a2{width:64vw;height:64vw;right:-18vw;bottom:-28vw;background:hsl(calc(var(--hue) + 46) 56% 22%)}
 #a3{width:46vw;height:46vw;left:38%;top:28%;background:hsl(calc(var(--hue) - 34) 52% 18%)}
@@ -53,7 +54,7 @@ header{flex:0 0 auto;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .b.on{background:hsl(var(--hue) 74% 58%);border-color:hsl(var(--hue) 74% 58%);color:#0A0D13}
 .b.rd{color:#FF9089;border-color:#5C3038}
 
-main{flex:1;display:flex;flex-direction:column;gap:10px;min-height:0}
+main{flex:1;display:flex;flex-direction:column;gap:10px}
 .left{display:flex;flex-direction:column;gap:10px}
 .center{display:flex;flex-direction:column;gap:10px;min-width:0}
 
@@ -156,7 +157,7 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:26px;heigh
   .b{flex:0 0 auto;padding:12px 14px}
   .bar{flex-wrap:nowrap}
   main{flex-direction:row}
-  .left{width:236px;flex:0 0 auto}
+  .left{width:236px;flex:0 0 auto;align-self:flex-start}
   .center{flex:1}
   .kg{grid-template-columns:repeat(3,1fr)}
   .nk{aspect-ratio:1/.92}
