@@ -32,6 +32,7 @@ const BANCHI=[
 const S={on:false,ctx:null,master:null,padBus:null,fxBus:null,shimBus:null,wet:null,el:null,
   voce:null,tasto:null,min:false,tim:0,ban:0,pv:.76,rv:.62,fade:4.5,
   liv:{},loops:{},hold:{},lib:{},usaLib:false,wake:null,
+  bg:false,lim:null,flusso:null,bgEl:null,
   segui:false,codice:"",indirizzo:"",timer:null,ultimoOk:0,ultimoLive:null,
   brano:"",attesa:2500,fallimenti:0};
 
@@ -88,6 +89,7 @@ function spegni(){
   $("#app").classList.remove("live");
   $("#power").classList.remove("on");
   $("#pwA").textContent="Accendi";$("#pwC").textContent="tocca per iniziare";
+  disattivaSfondo();
   try{if(S.el){S.el.pause();S.el.remove();S.el=null;}}catch(e){}
   if(S.ctx)S.ctx.suspend();
   media="—";diag();
@@ -148,6 +150,7 @@ function buildAudio(){
   cv.connect(wet);dry.connect(master);wet.connect(master);
   const lim=ctx.createWaveShaper();lim.curve=curvaMorbida(.75);lim.oversample="4x";
   master.connect(cp);cp.connect(lim);lim.connect(ctx.destination);
+  S.lim=lim;
   Object.assign(S,{ctx,master,padBus,fxBus,shimBus,wet});
 }
 
@@ -271,13 +274,13 @@ function suona(i){
   const v=useFile?makeVoceFile(S.lib[i]):makeVoce(i,S.min,TIMBRI[S.tim]);
   if(S.voce)S.voce.chiudi(S.fade);
   S.voce=v;v.apri(Math.max(1,S.fade));
-  S.tasto=i;keys();hue(i);
+  S.tasto=i;keys();hue(i);aggiornaSchedaSistema();
   $("#pwC").textContent=useFile?"set caricato":TIMBRI[S.tim].n.toLowerCase();
 }
 function dissolvi(s){
   if(!S.voce)return;
   const v=S.voce;S.voce=null;v.chiudi(s===undefined?S.fade:s);
-  S.tasto=null;keys();
+  S.tasto=null;keys();aggiornaSchedaSistema();
 }
 function panico(){
   if(S.voce){const v=S.voce;S.voce=null;v.chiudi(.08);}
@@ -554,6 +557,113 @@ function scollega(){
    annullo la memoria dell'ultimo stato remoto per non farlo tornare indietro. */
 function manualeHaPriorita(){ if(S.segui) S.ultimoLive=null; }
 
+
+/* ============================================================
+   MODALITA' SFONDO
+   Il Web Audio da solo viene sospeso quando la pagina passa in
+   secondo piano. Facendo uscire il suono attraverso un elemento
+   media, il sistema lo considera una riproduzione vera e continua
+   anche a schermo bloccato, con i comandi sulla schermata di blocco.
+   ============================================================ */
+
+function supportaSfondo(){
+  return !!(S.ctx && S.ctx.createMediaStreamDestination && window.MediaStream);
+}
+
+/* piccola dissolvenza sul volume generale: evita lo scatto al cambio di uscita */
+function conAttenuazione(azione){
+  if(!S.master){ azione(); return; }
+  const g=S.master.gain, t=S.ctx.currentTime, v=g.value;
+  g.cancelScheduledValues(t);
+  g.setValueAtTime(v,t);
+  g.linearRampToValueAtTime(.0001,t+.06);
+  setTimeout(()=>{
+    try{ azione(); }catch(e){}
+    const t2=S.ctx.currentTime;
+    g.cancelScheduledValues(t2);
+    g.setValueAtTime(.0001,t2);
+    g.linearRampToValueAtTime(v,t2+.12);
+  },80);
+}
+
+async function attivaSfondo(){
+  if(!S.on){ await accendi(); if(!S.on) return; }
+  if(!supportaSfondo()){ toast("Questo browser non permette l'audio in secondo piano"); return; }
+  try{
+    if(!S.flusso) S.flusso=S.ctx.createMediaStreamDestination();
+    if(!S.bgEl){
+      const el=document.createElement("audio");
+      el.setAttribute("playsinline","");
+      el.autoplay=true;
+      el.className="uscita-sfondo";
+      document.body.appendChild(el);
+      S.bgEl=el;
+    }
+    S.bgEl.srcObject=S.flusso.stream;
+    // una sola uscita per volta, altrimenti il suono si sdoppia e si sporca
+    conAttenuazione(()=>{
+      try{ S.lim.disconnect(); }catch(e){}
+      S.lim.connect(S.flusso);
+    });
+    await S.bgEl.play();
+    S.bg=true;
+    $("#sfondo").classList.add("on");
+    preparaComandiSistema();
+    aggiornaSchedaSistema();
+    toast("Il suono continua anche a schermo spento");
+  }catch(e){
+    // ripristino l'uscita normale: meglio senza sfondo che senza suono
+    try{ S.lim.disconnect(); S.lim.connect(S.ctx.destination); }catch(e2){}
+    S.bg=false;
+    $("#sfondo").classList.remove("on");
+    toast("Non riesco ad attivare lo sfondo su questo dispositivo");
+  }
+}
+
+function disattivaSfondo(){
+  if(!S.bg) return;
+  conAttenuazione(()=>{
+    try{ S.lim.disconnect(); }catch(e){}
+    S.lim.connect(S.ctx.destination);
+  });
+  try{ if(S.bgEl) S.bgEl.pause(); }catch(e){}
+  S.bg=false;
+  $("#sfondo").classList.remove("on");
+  try{ if(navigator.mediaSession) navigator.mediaSession.playbackState="none"; }catch(e){}
+}
+
+/* comandi sulla schermata di blocco e sugli auricolari */
+function preparaComandiSistema(){
+  if(!("mediaSession" in navigator)) return;
+  const m=navigator.mediaSession;
+  const metti=(nome,fn)=>{ try{ m.setActionHandler(nome,fn); }catch(e){} };
+  metti("play", ()=>{ try{ S.ctx.resume(); if(S.bgEl) S.bgEl.play(); }catch(e){}
+                      m.playbackState="playing"; });
+  metti("pause", ()=>{ dissolvi(); m.playbackState="paused"; });
+  metti("stop", ()=>{ panico(); m.playbackState="paused"; });
+  metti("previoustrack", null);
+  metti("nexttrack", null);
+  metti("seekbackward", null);
+  metti("seekforward", null);
+}
+
+function aggiornaSchedaSistema(){
+  if(!("mediaSession" in navigator) || !S.bg) return;
+  try{
+    const suona = S.tasto!==null;
+    const tonalita = suona ? (NOTE[S.tasto][1]+(S.min?" minore":" maggiore")) : "in attesa";
+    if(window.MediaMetadata){
+      navigator.mediaSession.metadata=new MediaMetadata({
+        title:"BTL Pad — "+tonalita,
+        artist: S.usaLib ? "Il tuo set" : TIMBRI[S.tim].n,
+        album:"Be the Light",
+        artwork:[{src:"/logo.png",sizes:"440x440",type:"image/png"}]
+      });
+    }
+    navigator.mediaSession.playbackState = suona ? "playing" : "paused";
+  }catch(e){}
+}
+
 /* ================= render ================= */
 function keys(){
   $$(".nk").forEach(k=>k.classList.toggle("on",+k.dataset.i===S.tasto));
@@ -654,6 +764,7 @@ function mix(){
 }
 
 /* ================= comandi ================= */
+$("#sfondo").addEventListener("click",()=>{ S.bg?disattivaSfondo():attivaSfondo(); });
 $("#segui").addEventListener("click",()=>{ S.segui?scollega():collega(); });
 $("#codice").addEventListener("input",e=>{e.target.value=e.target.value.toUpperCase();});
 $("#power").addEventListener("click",accendi);
@@ -678,6 +789,13 @@ $("#wake").onclick=async()=>{
 };
 document.addEventListener("pointerdown",()=>{
   if(S.on&&S.ctx&&S.ctx.state!=="running")S.ctx.resume().then(diag);},true);
+
+/* al ritorno in primo piano verifico che sia tutto ancora vivo */
+document.addEventListener("visibilitychange",()=>{
+  if(document.visibilityState!=="visible") return;
+  if(S.on&&S.ctx&&S.ctx.state!=="running") S.ctx.resume().then(diag);
+  if(S.bg&&S.bgEl&&S.bgEl.paused){ S.bgEl.play().catch(()=>{}); }
+});
 
 buildKeys();patch();tabs();grid();mix();keys();diag();ripristina();spia('','non collegato');
 

@@ -126,6 +126,36 @@ Verifica sempre la licenza prima di usare qualcosa in pubblico.
 
 ---
 
+## Modalita' sfondo
+
+Il pulsante **sfondo** nella barra in alto permette al pad di continuare a
+suonare quando esci dall'app o blocchi lo schermo. Serve nei culti lunghi, o
+quando l'iPad viene usato anche per altro.
+
+Tecnicamente il suono smette di uscire direttamente dalla scheda audio e viene
+fatto passare attraverso un elemento media: cosi' il sistema lo tratta come una
+riproduzione vera e non lo sospende. Sulla schermata di blocco compaiono il logo,
+la tonalita' in corso e i comandi: **pausa** dissolve il pad, **stop** taglia tutto.
+
+Note pratiche:
+
+- Attivalo **prima** di iniziare, non a meta' brano: il passaggio fra le due
+  uscite comporta una brevissima attenuazione (poco piu' di un decimo di secondo).
+- Con lo sfondo attivo, il pulsante **schermo** diventa superfluo: serviva solo a
+  impedire lo spegnimento del display.
+- Se il dispositivo non lo permette, l'app te lo dice e torna da sola all'uscita
+  normale. Meglio senza sfondo che senza suono.
+- Rientrando nell'app, se il sistema aveva messo in pausa la riproduzione, il pad
+  riparte da solo.
+
+**Da verificare sul dispositivo.** Questa funzione dipende molto dalla versione
+di iOS e non e' verificabile in laboratorio. Prova cosi': attiva lo sfondo, avvia
+una tonalita', blocca lo schermo e aspetta un minuto. Se senti ancora il pad,
+funziona. Controlla anche che sulla schermata di blocco compaia BTL Pad con il logo.
+
+
+---
+
 ## Collegamento con Be the Light
 
 Il pad puo' seguire in automatico la tonalita' del brano attivo nella modalita'
@@ -174,6 +204,7 @@ anche con la rete funzionante.
 ## Da fare
 
 - Salvataggio delle preferenze fra una sessione e l'altra.
+- Verifica della modalita' sfondo su piu' versioni di iOS.
 - Loop conservati sul dispositivo invece che ricaricati ogni volta.
 
 ---
