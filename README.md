@@ -126,10 +126,53 @@ Verifica sempre la licenza prima di usare qualcosa in pubblico.
 
 ---
 
+## Collegamento con Be the Light
+
+Il pad puo' seguire in automatico la tonalita' del brano attivo nella modalita'
+live di Be the Light. Nel pannello **Segui Be the Light** inserisci il codice
+sessione e l'indirizzo dell'installazione di BTL, poi tocca **collega**.
+I due dati restano salvati sul dispositivo.
+
+Il pad interroga `GET /api/pad?codice=XXXXXX` ogni 2,5 secondi e usa i campi
+`tonica` (0-11) e `modo` cosi' come arrivano, senza ricalcolarli.
+
+**La spia accanto al titolo:**
+
+| colore | significato |
+|---|---|
+| spenta | non collegato, funzionamento manuale |
+| verde | collegato, mostra brano e tonalita' |
+| ambra | live fermo, codice non riconosciuto, o risposta illeggibile |
+| rossa | rete assente: **il pad tiene l'ultimo accordo** |
+
+### Scelte pensate per il palco
+
+- Il pad cambia accordo **solo quando la tonica cambia davvero**, con una
+  dissolvenza di 1,5 secondi. Le interrogazioni ripetute non riavviano il suono.
+- **Se la rete cade il pad non ammutolisce mai**: mantiene l'accordo e rallenta
+  progressivamente i tentativi, fino a un massimo di 15 secondi fra l'uno e l'altro.
+- **Il comando manuale ha sempre la precedenza.** Se tocchi un tasto mentre sei
+  collegato, comandi tu; il pad tornera' a seguire al cambio di brano successivo.
+- Scollegare non ferma il suono: il pad continua, semplicemente smette di seguire.
+
+### Serve dal lato Be the Light
+
+L'endpoint deve permettere le richieste da un altro dominio, perche' il pad e'
+pubblicato separatamente:
+
+```
+Access-Control-Allow-Origin: *
+Cache-Control: no-store
+```
+
+Senza la prima intestazione il browser blocca la richiesta e la spia resta rossa
+anche con la rete funzionante.
+
+
+---
+
 ## Da fare
 
-- **Collegamento con la modalità live di Be the Light**: il pad segue in
-  automatico la tonalità del brano in scaletta, trasposizioni comprese.
 - Salvataggio delle preferenze fra una sessione e l'altra.
 - Loop conservati sul dispositivo invece che ricaricati ogni volta.
 

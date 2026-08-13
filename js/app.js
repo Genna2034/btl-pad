@@ -31,7 +31,9 @@ const BANCHI=[
 
 const S={on:false,ctx:null,master:null,padBus:null,fxBus:null,shimBus:null,wet:null,el:null,
   voce:null,tasto:null,min:false,tim:0,ban:0,pv:.76,rv:.62,fade:4.5,
-  liv:{},loops:{},hold:{},lib:{},usaLib:false,wake:null};
+  liv:{},loops:{},hold:{},lib:{},usaLib:false,wake:null,
+  segui:false,codice:"",indirizzo:"",timer:null,ultimoOk:0,ultimoLive:null,
+  brano:"",attesa:2500,fallimenti:0};
 
 const $=s=>document.querySelector(s),$$=s=>Array.from(document.querySelectorAll(s));
 function toast(m){const t=$("#toast");t.textContent=m;t.classList.add("on");
@@ -422,6 +424,136 @@ function caricaSet(){
   i.click();
 }
 
+
+/* ============================================================
+   COLLEGAMENTO CON BE THE LIGHT
+   Interroga GET /api/pad?codice=XXXXXX ogni 2,5 secondi.
+   Principio guida: la rete puo' solo AGGIUNGERE informazione.
+   Se cade, il pad continua a suonare l'ultimo accordo.
+   ============================================================ */
+const FADE_AUTO=1.5;          // dissolvenza dei cambi automatici, in secondi
+const SCADENZA=4000;          // oltre questo, la richiesta viene abbandonata
+
+function memorizza(){
+  try{
+    localStorage.setItem("btlpad.codice",S.codice);
+    localStorage.setItem("btlpad.indirizzo",S.indirizzo);
+  }catch(e){}
+}
+function ripristina(){
+  try{
+    S.codice=localStorage.getItem("btlpad.codice")||"";
+    S.indirizzo=localStorage.getItem("btlpad.indirizzo")||"";
+  }catch(e){}
+  const c=$("#codice"), i=$("#indirizzo");
+  if(c) c.value=S.codice;
+  if(i) i.value=S.indirizzo;
+}
+
+function spia(colore,testo){
+  const p=$("#spia"); if(!p) return;
+  p.className="spia"+(colore?" "+colore:"");
+  const t=$("#syncStato"); if(t) t.textContent=testo;
+}
+
+/* Legge il payload con tolleranza sui nomi dei campi: se BTL cambia
+   qualcosa di marginale, il pad non smette di funzionare. */
+function leggiPayload(j){
+  const d=(j && typeof j==="object" && j.pad && typeof j.pad==="object") ? j.pad : j;
+  if(!d || typeof d!=="object") return null;
+  const t=[d.tonica,d.tonic,d.key,d.root].find(v=>Number.isInteger(v));
+  if(t===undefined || t<0 || t>11) return null;
+  const grezzo=String(d.modo??d.mode??d.minore??d.minor??"").toLowerCase();
+  const minore = grezzo.startsWith("min") || grezzo==="true" || d.minore===true || d.minor===true;
+  const attivo = (d.stato??d.status??d.attivo??d.active);
+  const fermo = attivo===false || String(attivo).toLowerCase()==="fermo" ||
+                String(attivo).toLowerCase()==="stopped";
+  const titolo = d.brano&&d.brano.titolo ? d.brano.titolo
+               : (d.titolo || d.title || (d.brano&&d.brano.title) || "");
+  return {tonica:t, minore, fermo, titolo:String(titolo).slice(0,28)};
+}
+
+async function interroga(){
+  if(!S.segui) return;
+  const url = S.indirizzo.replace(/\/+$/,"")+"/api/pad?codice="+encodeURIComponent(S.codice);
+  const ab = new AbortController();
+  const scad = setTimeout(()=>ab.abort(), SCADENZA);
+  try{
+    const r = await fetch(url,{signal:ab.signal,cache:"no-store",headers:{"Accept":"application/json"}});
+    clearTimeout(scad);
+    if(!r.ok){
+      // 404 o 403: il codice non e' valido. Non e' un problema di rete.
+      if(r.status===404||r.status===403){
+        spia("ambra","codice non riconosciuto");
+        S.attesa=8000; S.fallimenti=0; return;
+      }
+      throw new Error("HTTP "+r.status);
+    }
+    const dati = leggiPayload(await r.json());
+    S.ultimoOk = Date.now(); S.fallimenti = 0; S.attesa = 2500;
+    if(!dati){ spia("ambra","risposta non leggibile"); return; }
+    S.brano = dati.titolo;
+    if(dati.fermo){
+      spia("ambra", "live fermo"+(S.brano?" · "+S.brano:""));
+      return;                       // il pad resta com'e': non ammutolisce
+    }
+    applicaDaLive(dati.tonica, dati.minore);
+    spia("verde", (S.brano||"collegato")+" · "+NOTE[dati.tonica][1]+(dati.minore?"m":""));
+  }catch(e){
+    clearTimeout(scad);
+    S.fallimenti++;
+    // niente panico: tengo l'accordo e rallento i tentativi
+    S.attesa = Math.min(15000, 2500*Math.pow(1.6,Math.min(S.fallimenti,5)));
+    spia("rossa", S.tasto!==null ? "rete assente · tengo l'accordo" : "rete assente");
+  }
+}
+
+function applicaDaLive(t,minore){
+  if(!S.on) return;                                  // audio non ancora sbloccato
+  if(S.ultimoLive && S.ultimoLive.t===t && S.ultimoLive.m===minore && S.tasto===t) return;
+  S.ultimoLive={t,m:minore};
+  if(S.min!==minore){
+    S.min=minore;
+    $$("#mode button").forEach(b=>b.classList.toggle("on", (b.dataset.m==="1")===minore));
+  }
+  const tenuta=S.fade;                               // dissolvenza breve solo per i cambi automatici
+  S.fade=FADE_AUTO;
+  suona(t);
+  S.fade=tenuta;
+}
+
+function ciclo(){
+  clearTimeout(S.timer);
+  if(!S.segui) return;
+  interroga().finally(()=>{
+    if(S.segui) S.timer=setTimeout(ciclo,S.attesa);
+  });
+}
+
+function collega(){
+  const c=$("#codice"), i=$("#indirizzo");
+  S.codice=(c.value||"").trim().toUpperCase();
+  S.indirizzo=(i.value||"").trim();
+  if(!S.codice){ toast("Inserisci il codice sessione di Be the Light"); return; }
+  if(!/^https?:\/\//i.test(S.indirizzo)){ toast("L'indirizzo deve iniziare con https://"); return; }
+  memorizza();
+  S.segui=true; S.fallimenti=0; S.attesa=2500; S.ultimoLive=null;
+  $("#segui").textContent="scollega";
+  $("#segui").classList.add("on");
+  spia("ambra","collegamento…");
+  ciclo();
+}
+function scollega(){
+  S.segui=false; clearTimeout(S.timer); S.timer=null; S.ultimoLive=null;
+  $("#segui").textContent="collega";
+  $("#segui").classList.remove("on");
+  spia("", "non collegato");   // il pad continua a suonare: comando manuale
+}
+
+/* Se l'utente tocca un tasto a mano mentre e' collegato, comanda lui:
+   annullo la memoria dell'ultimo stato remoto per non farlo tornare indietro. */
+function manualeHaPriorita(){ if(S.segui) S.ultimoLive=null; }
+
 /* ================= render ================= */
 function keys(){
   $$(".nk").forEach(k=>k.classList.toggle("on",+k.dataset.i===S.tasto));
@@ -434,7 +566,7 @@ function buildKeys(){
   NOTE.forEach((n,i)=>{
     const b=document.createElement("button");b.className="nk";b.dataset.i=i;
     b.innerHTML=`<b>${n[0]}</b><i>${n[1]}</i>`;
-    b.onclick=()=>{S.tasto===i?dissolvi():suona(i);};
+    b.onclick=()=>{manualeHaPriorita();S.tasto===i?dissolvi():suona(i);};
     w.appendChild(b);
   });
 }
@@ -522,6 +654,8 @@ function mix(){
 }
 
 /* ================= comandi ================= */
+$("#segui").addEventListener("click",()=>{ S.segui?scollega():collega(); });
+$("#codice").addEventListener("input",e=>{e.target.value=e.target.value.toUpperCase();});
 $("#power").addEventListener("click",accendi);
 $("#lib").addEventListener("click",()=>{ if(!S.on){accendi();return;} caricaSet(); });
 $$("#mode button").forEach(b=>b.onclick=()=>{
@@ -545,7 +679,7 @@ $("#wake").onclick=async()=>{
 document.addEventListener("pointerdown",()=>{
   if(S.on&&S.ctx&&S.ctx.state!=="running")S.ctx.resume().then(diag);},true);
 
-buildKeys();patch();tabs();grid();mix();keys();diag();
+buildKeys();patch();tabs();grid();mix();keys();diag();ripristina();spia('','non collegato');
 
 /* ---- splash: esce da solo, o al primo tocco ---- */
 (function(){

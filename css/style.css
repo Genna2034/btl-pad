@@ -174,6 +174,24 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:26px;heigh
   .grid{grid-template-columns:repeat(4,1fr);grid-auto-rows:78px}
 }
 
+/* ---------- collegamento con Be the Light ---------- */
+.sync{display:flex;flex-direction:column;gap:8px}
+.synctop{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.spia{width:11px;height:11px;border-radius:50%;background:#4A5768;flex:0 0 auto;
+  box-shadow:0 0 0 0 transparent;transition:background .3s,box-shadow .3s}
+.spia.verde{background:#3FD98A;box-shadow:0 0 12px rgba(63,217,138,.7)}
+.spia.ambra{background:#E0A020;box-shadow:0 0 12px rgba(224,160,32,.6)}
+.spia.rossa{background:#E8564E;box-shadow:0 0 12px rgba(232,86,78,.6);animation:lampeggia 1.4s ease-in-out infinite}
+@keyframes lampeggia{50%{opacity:.35}}
+.inp{width:100%;background:#0D1219;border:1px solid var(--line);border-radius:10px;
+  padding:12px 13px;color:#fff;font-family:var(--m);font-size:14px;letter-spacing:.06em}
+.inp::placeholder{color:#6E7C8C;letter-spacing:0}
+.inp:focus{outline:none;border-color:var(--acc)}
+#codice{text-transform:uppercase;letter-spacing:.24em;text-align:center;font-size:17px}
+.b.largo{width:100%;flex:none}
+.syncstato{font-family:var(--d);text-transform:uppercase;letter-spacing:.08em;
+  font-size:12px;color:var(--mu);line-height:1.45;min-height:17px}
+
 /* ================= SPLASH ================= */
 #splash{position:fixed;inset:0;z-index:200;display:flex;flex-direction:column;
   align-items:center;justify-content:center;
