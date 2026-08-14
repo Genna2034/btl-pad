@@ -33,8 +33,8 @@ const S={on:false,ctx:null,master:null,padBus:null,fxBus:null,shimBus:null,wet:n
   voce:null,tasto:null,min:false,tim:0,ban:0,pv:.76,rv:.62,fade:4.5,
   liv:{},loops:{},hold:{},lib:{},usaLib:false,wake:null,
   bg:false,lim:null,flusso:null,bgEl:null,
-  segui:false,codice:"",indirizzo:"",timer:null,ultimoOk:0,ultimoLive:null,
-  brano:"",attesa:2500,fallimenti:0};
+  segui:false,codice:"",timer:null,ultimoLive:null,
+  idBrano:null,manualeSu:null,titolo:"",fallimenti:0};
 
 const $=s=>document.querySelector(s),$$=s=>Array.from(document.querySelectorAll(s));
 function toast(m){const t=$("#toast");t.textContent=m;t.classList.add("on");
@@ -429,134 +429,132 @@ function caricaSet(){
 
 
 /* ============================================================
-   COLLEGAMENTO CON BE THE LIGHT
-   Interroga GET /api/pad?codice=XXXXXX ogni 2,5 secondi.
-   Principio guida: la rete puo' solo AGGIUNGERE informazione.
+   COLLEGAMENTO CON LA MODALITA' LIVE DI BE THE LIGHT
+   Endpoint HTTP interrogato ogni 3 secondi. Nessun login, nessun cookie.
+   Regola che governa tutto: la rete puo' solo AGGIUNGERE informazione.
    Se cade, il pad continua a suonare l'ultimo accordo.
    ============================================================ */
-const FADE_AUTO=1.5;          // dissolvenza dei cambi automatici, in secondi
-const SCADENZA=4000;          // oltre questo, la richiesta viene abbandonata
+const BTL = "https://btl-nu.vercel.app";
+const OGNI = 3000;            // ritmo di interrogazione richiesto
+const SCADENZA = 5000;        // oltre questo abbandono la richiesta
 
-function memorizza(){
-  try{
-    localStorage.setItem("btlpad.codice",S.codice);
-    localStorage.setItem("btlpad.indirizzo",S.indirizzo);
-  }catch(e){}
-}
+function memorizza(){ try{ localStorage.setItem("btlpad.codice",S.codice); }catch(e){} }
 function ripristina(){
-  try{
-    S.codice=localStorage.getItem("btlpad.codice")||"";
-    S.indirizzo=localStorage.getItem("btlpad.indirizzo")||"";
-  }catch(e){}
-  const c=$("#codice"), i=$("#indirizzo");
-  if(c) c.value=S.codice;
-  if(i) i.value=S.indirizzo;
+  try{ S.codice = localStorage.getItem("btlpad.codice") || ""; }catch(e){}
+  const c=$("#codice"); if(c) c.value=S.codice;
 }
 
 function spia(colore,testo){
-  const p=$("#spia"); if(!p) return;
-  p.className="spia"+(colore?" "+colore:"");
+  const p=$("#spia"); if(p) p.className="spia"+(colore?" "+colore:"");
   const t=$("#syncStato"); if(t) t.textContent=testo;
 }
 
-/* Legge il payload con tolleranza sui nomi dei campi: se BTL cambia
-   qualcosa di marginale, il pad non smette di funzionare. */
+/* Lettura del payload. 'fermo' NON e' un errore: e' uno stato legittimo
+   in cui tonica vale null. */
 function leggiPayload(j){
-  const d=(j && typeof j==="object" && j.pad && typeof j.pad==="object") ? j.pad : j;
-  if(!d || typeof d!=="object") return null;
-  const t=[d.tonica,d.tonic,d.key,d.root].find(v=>Number.isInteger(v));
-  if(t===undefined || t<0 || t>11) return null;
-  const grezzo=String(d.modo??d.mode??d.minore??d.minor??"").toLowerCase();
-  const minore = grezzo.startsWith("min") || grezzo==="true" || d.minore===true || d.minor===true;
-  const attivo = (d.stato??d.status??d.attivo??d.active);
-  const fermo = attivo===false || String(attivo).toLowerCase()==="fermo" ||
-                String(attivo).toLowerCase()==="stopped";
-  const titolo = d.brano&&d.brano.titolo ? d.brano.titolo
-               : (d.titolo || d.title || (d.brano&&d.brano.title) || "");
-  return {tonica:t, minore, fermo, titolo:String(titolo).slice(0,28)};
+  if(!j || typeof j!=="object") return null;
+  const fermo = String(j.stato||"").toLowerCase()==="fermo";
+  const brano = j.brano||{};
+  const titolo = String(brano.titolo||"").slice(0,26);
+  const idBrano = brano.id!=null ? String(brano.id) : (titolo||null);
+  if(fermo) return {fermo:true, titolo, idBrano};
+  if(!Number.isInteger(j.tonica) || j.tonica<0 || j.tonica>11) return null;
+  return {
+    fermo:false,
+    tonica:j.tonica,
+    minore:String(j.modo||"").toLowerCase().startsWith("min"),
+    titolo, idBrano
+  };
 }
 
 async function interroga(){
   if(!S.segui) return;
-  const url = S.indirizzo.replace(/\/+$/,"")+"/api/pad?codice="+encodeURIComponent(S.codice);
+  const url = BTL+"/api/pad?codice="+encodeURIComponent(S.codice);
   const ab = new AbortController();
   const scad = setTimeout(()=>ab.abort(), SCADENZA);
   try{
-    const r = await fetch(url,{signal:ab.signal,cache:"no-store",headers:{"Accept":"application/json"}});
+    const r = await fetch(url,{signal:ab.signal,cache:"no-store",
+                              credentials:"omit",headers:{"Accept":"application/json"}});
     clearTimeout(scad);
-    if(!r.ok){
-      // 404 o 403: il codice non e' valido. Non e' un problema di rete.
-      if(r.status===404||r.status===403){
-        spia("ambra","codice non riconosciuto");
-        S.attesa=8000; S.fallimenti=0; return;
-      }
-      throw new Error("HTTP "+r.status);
+
+    // codice sbagliato: e' inutile insistere, spengo e lo dico chiaramente
+    if(r.status===401 || r.status===403 || r.status===404){
+      scollega();
+      spia("rossa","codice non valido");
+      toast("Codice sessione non valido: controllalo su Be the Light");
+      return;
     }
-    const dati = leggiPayload(await r.json());
-    S.ultimoOk = Date.now(); S.fallimenti = 0; S.attesa = 2500;
-    if(!dati){ spia("ambra","risposta non leggibile"); return; }
-    S.brano = dati.titolo;
-    if(dati.fermo){
-      spia("ambra", "live fermo"+(S.brano?" · "+S.brano:""));
-      return;                       // il pad resta com'e': non ammutolisce
+    if(!r.ok) throw new Error("HTTP "+r.status);
+
+    const d = leggiPayload(await r.json());
+    S.fallimenti = 0;
+    if(!d){ spia("ambra","risposta non leggibile"); return; }
+
+    // brano nuovo: decade l'eventuale scelta manuale del musicista
+    if(d.idBrano && d.idBrano!==S.idBrano){ S.idBrano=d.idBrano; S.manualeSu=null; }
+    S.titolo = d.titolo;
+
+    if(d.fermo){
+      spia("ambra","live non attivo"+(d.titolo?" · "+d.titolo:""));
+      return;                                   // il pad resta com'e'
     }
-    applicaDaLive(dati.tonica, dati.minore);
-    spia("verde", (S.brano||"collegato")+" · "+NOTE[dati.tonica][1]+(dati.minore?"m":""));
+    if(S.manualeSu && S.manualeSu===S.idBrano){
+      spia("verde",(d.titolo||"collegato")+" · scelta manuale");
+      return;                                   // comanda il musicista
+    }
+    applicaDaLive(d.tonica,d.minore);
+    spia("verde",(d.titolo||"collegato")+" · "+NOTE[d.tonica][1]+(d.minore?"m":""));
+
   }catch(e){
     clearTimeout(scad);
     S.fallimenti++;
-    // niente panico: tengo l'accordo e rallento i tentativi
-    S.attesa = Math.min(15000, 2500*Math.pow(1.6,Math.min(S.fallimenti,5)));
-    spia("rossa", S.tasto!==null ? "rete assente · tengo l'accordo" : "rete assente");
+    spia("rossa", S.tasto!==null ? "scollegato · tengo l'accordo" : "scollegato");
   }
 }
 
 function applicaDaLive(t,minore){
-  if(!S.on) return;                                  // audio non ancora sbloccato
-  if(S.ultimoLive && S.ultimoLive.t===t && S.ultimoLive.m===minore && S.tasto===t) return;
+  if(!S.on) return;                                   // audio non ancora sbloccato
+  if(S.ultimoLive && S.ultimoLive.t===t && S.ultimoLive.m===minore) return;  // identica: non tocco nulla
   S.ultimoLive={t,m:minore};
   if(S.min!==minore){
     S.min=minore;
-    $$("#mode button").forEach(b=>b.classList.toggle("on", (b.dataset.m==="1")===minore));
+    $$("#mode button").forEach(b=>b.classList.toggle("on",(b.dataset.m==="1")===minore));
   }
-  const tenuta=S.fade;                               // dissolvenza breve solo per i cambi automatici
-  S.fade=FADE_AUTO;
-  suona(t);
-  S.fade=tenuta;
+  suona(t);                                           // usa la dissolvenza scelta dall'utente
 }
 
 function ciclo(){
   clearTimeout(S.timer);
   if(!S.segui) return;
-  interroga().finally(()=>{
-    if(S.segui) S.timer=setTimeout(ciclo,S.attesa);
-  });
+  interroga().finally(()=>{ if(S.segui) S.timer=setTimeout(ciclo,OGNI); });
 }
 
 function collega(){
-  const c=$("#codice"), i=$("#indirizzo");
+  const c=$("#codice");
   S.codice=(c.value||"").trim().toUpperCase();
-  S.indirizzo=(i.value||"").trim();
-  if(!S.codice){ toast("Inserisci il codice sessione di Be the Light"); return; }
-  if(!/^https?:\/\//i.test(S.indirizzo)){ toast("L'indirizzo deve iniziare con https://"); return; }
+  if(S.codice.length!==6){ toast("Il codice sessione ha sei caratteri"); return; }
   memorizza();
-  S.segui=true; S.fallimenti=0; S.attesa=2500; S.ultimoLive=null;
-  $("#segui").textContent="scollega";
+  S.segui=true; S.fallimenti=0; S.ultimoLive=null; S.manualeSu=null; S.idBrano=null;
+  $("#segui").textContent="smetti di seguire";
   $("#segui").classList.add("on");
   spia("ambra","collegamento…");
   ciclo();
 }
 function scollega(){
-  S.segui=false; clearTimeout(S.timer); S.timer=null; S.ultimoLive=null;
-  $("#segui").textContent="collega";
+  S.segui=false; clearTimeout(S.timer); S.timer=null;
+  S.ultimoLive=null; S.manualeSu=null;
+  $("#segui").textContent="segui il live";
   $("#segui").classList.remove("on");
-  spia("", "non collegato");   // il pad continua a suonare: comando manuale
+  spia("","non collegato");        // il pad continua a suonare
 }
 
-/* Se l'utente tocca un tasto a mano mentre e' collegato, comanda lui:
-   annullo la memoria dell'ultimo stato remoto per non farlo tornare indietro. */
-function manualeHaPriorita(){ if(S.segui) S.ultimoLive=null; }
-
+/* Il musicista tocca un tasto mentre e' collegato: comanda lui,
+   fino al cambio di brano. */
+function manualeHaPriorita(){
+  if(!S.segui) return;
+  S.manualeSu = S.idBrano || "senza-brano";
+  spia("verde",(S.titolo||"collegato")+" · scelta manuale");
+}
 
 /* ============================================================
    MODALITA' SFONDO

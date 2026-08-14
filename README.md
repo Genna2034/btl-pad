@@ -158,46 +158,39 @@ funziona. Controlla anche che sulla schermata di blocco compaia BTL Pad con il l
 
 ## Collegamento con Be the Light
 
-Il pad puo' seguire in automatico la tonalita' del brano attivo nella modalita'
-live di Be the Light. Nel pannello **Segui Be the Light** inserisci il codice
-sessione e l'indirizzo dell'installazione di BTL, poi tocca **collega**.
-I due dati restano salvati sul dispositivo.
+Il pad puo' seguire la tonalita' del brano attivo nella modalita' live di
+Be the Light. Nel pannello **Segui Be the Light** inserisci il codice sessione a
+sei caratteri e tocca **segui il live**. Il codice resta salvato sul dispositivo.
 
-Il pad interroga `GET /api/pad?codice=XXXXXX` ogni 2,5 secondi e usa i campi
-`tonica` (0-11) e `modo` cosi' come arrivano, senza ricalcolarli.
+Interroga `GET https://btl-nu.vercel.app/api/pad?codice=XXXXXX` ogni 3 secondi.
+Nessun login, nessun cookie.
 
-**La spia accanto al titolo:**
+Usa `tonica` (0-11, gia' trasposta) e `modo` **cosi' come arrivano**.
+Non ricalcola da `tonalitaOriginale` + `semitoni`: nel database di BTL le
+tonalita' sono scritte in modi disomogenei (`A`, `Am`, `Sol`, `Lam`, `F#m`) e si
+otterrebbero risultati diversi.
 
-| colore | significato |
+**L'indicatore:**
+
+| pallino | significato |
 |---|---|
-| spenta | non collegato, funzionamento manuale |
-| verde | collegato, mostra brano e tonalita' |
-| ambra | live fermo, codice non riconosciuto, o risposta illeggibile |
-| rossa | rete assente: **il pad tiene l'ultimo accordo** |
+| spento | non collegato: il pad funziona da solo |
+| verde | collegato, con il titolo del canto in corso |
+| ambra | live non attivo, o risposta illeggibile |
+| rosso | scollegato: **il pad tiene l'ultimo accordo** |
 
 ### Scelte pensate per il palco
 
-- Il pad cambia accordo **solo quando la tonica cambia davvero**, con una
-  dissolvenza di 1,5 secondi. Le interrogazioni ripetute non riavviano il suono.
-- **Se la rete cade il pad non ammutolisce mai**: mantiene l'accordo e rallenta
-  progressivamente i tentativi, fino a un massimo di 15 secondi fra l'uno e l'altro.
-- **Il comando manuale ha sempre la precedenza.** Se tocchi un tasto mentre sei
-  collegato, comandi tu; il pad tornera' a seguire al cambio di brano successivo.
-- Scollegare non ferma il suono: il pad continua, semplicemente smette di seguire.
-
-### Serve dal lato Be the Light
-
-L'endpoint deve permettere le richieste da un altro dominio, perche' il pad e'
-pubblicato separatamente:
-
-```
-Access-Control-Allow-Origin: *
-Cache-Control: no-store
-```
-
-Senza la prima intestazione il browser blocca la richiesta e la spia resta rossa
-anche con la rete funzionante.
-
+- Cambia **solo quando tonica o modo cambiano davvero**, usando la dissolvenza
+  impostata dall'utente e non un salto secco.
+- `stato: "fermo"` non spegne il pad: il leader potrebbe aver chiuso il live a
+  canto ancora in corso. Cambia solo l'indicatore.
+- **Se la rete cade il pad non ammutolisce mai**: tiene l'accordo e continua a
+  ritentare.
+- **401** (codice errato): messaggio chiaro e interruttore spento, senza
+  ritentare all'infinito.
+- **Il comando manuale ha la precedenza**: se il musicista tocca un tasto mentre
+  segue il live, vale la sua scelta **fino al cambio di brano**.
 
 ---
 
