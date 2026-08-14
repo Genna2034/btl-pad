@@ -806,6 +806,15 @@ $("#wake").onclick=async()=>{
    S.wake.addEventListener("release",()=>{S.wake=null;b.classList.remove("on");});
    b.classList.add("on");}catch(e){toast("Non riesco a tenere acceso lo schermo");}
 };
+/* scorciatoie da tastiera, utili con una tastiera collegata all'iPad o da computer */
+document.addEventListener("keydown",e=>{
+  if(!S.on) return;
+  const dentroCampo = e.target && (e.target.tagName==="INPUT" || e.target.tagName==="TEXTAREA");
+  if(dentroCampo) return;                       // sto scrivendo il codice sessione
+  if(e.code==="Space" || e.key===" "){ e.preventDefault(); manualeHaPriorita(); dissolvi(); }
+  else if(e.key==="Escape"){ e.preventDefault(); manualeHaPriorita(); panico(); }
+});
+
 document.addEventListener("pointerdown",()=>{
   if(S.on&&S.ctx&&S.ctx.state!=="running")S.ctx.resume().then(diag);},true);
 

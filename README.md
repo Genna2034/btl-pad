@@ -96,6 +96,10 @@ Luce e Campana seguono la tonalità attiva.
 file audio dal dispositivo. Un tocco lo avvia o lo ferma. Il mixer sotto regola
 il livello di ogni pad.
 
+**Scorciatoie da tastiera** (con una tastiera collegata all'iPad, o da computer):
+la **barra spaziatrice** dissolve il tappeto, **Esc** taglia tutto. Mentre si scrive
+nel campo del codice sessione le scorciatoie sono disattivate.
+
 **Stop.** *Dissolvi* chiude il pad con la dissolvenza impostata.
 *Stop* taglia tutto immediatamente: è il pulsante da premere se qualcosa va storto.
 

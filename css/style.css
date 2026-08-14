@@ -170,7 +170,8 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:26px;heigh
   .nk{aspect-ratio:1/.92}
   .patch{grid-template-columns:1fr}
   .grid{flex:1;grid-template-columns:repeat(4,1fr);grid-template-rows:repeat(2,1fr);
-        grid-auto-rows:auto;min-height:220px}
+        grid-auto-rows:auto;min-height:220px;max-height:380px}
+  .center{align-self:flex-start;width:100%}
   .mix{grid-template-columns:repeat(4,1fr)}
 }
 
