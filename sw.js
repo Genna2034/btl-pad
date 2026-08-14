@@ -1,7 +1,7 @@
 /* BTL Pad — service worker
    Scarica tutto alla prima visita, poi l'app vive offline.
    Alzare VERSIONE a ogni rilascio per far scaricare i file nuovi. */
-const VERSIONE = 'btl-pad-v4';
+const VERSIONE = 'btl-pad-v5';
 const RISORSE = [
   '/', '/index.html',
   '/css/style.css',

@@ -159,8 +159,23 @@ funziona. Controlla anche che sulla schermata di blocco compaia BTL Pad con il l
 ## Collegamento con Be the Light
 
 Il pad puo' seguire la tonalita' del brano attivo nella modalita' live di
-Be the Light. Nel pannello **Segui Be the Light** inserisci il codice sessione a
-sei caratteri e tocca **segui il live**. Il codice resta salvato sul dispositivo.
+Be the Light. Il codice sessione a sei caratteri si inserisce **una sola volta**: da li' in
+avanti il pad si collega da solo a ogni apertura.
+
+Ancora piu' comodo: il codice puo' viaggiare nell'indirizzo, cosi' Be the Light
+puo' offrire un collegamento gia' pronto (o un QR da inquadrare):
+
+```
+https://btl-pad.vercel.app/?codice=X9K2M7
+```
+
+Aprendolo, il pad memorizza il codice, si collega e ripulisce l'indirizzo.
+
+**L'unico gesto che resta obbligatorio e' toccare il pulsante di accensione**,
+perche' nessun browser permette di riprodurre suono senza un tocco dell'utente.
+Se il live sta gia' suonando, il pulsante lampeggia in ambra e annuncia la
+tonalita' in attesa ("tocca per accendere · Sol maggiore"): al tocco il pad parte
+immediatamente in quella tonalita'.
 
 Interroga `GET https://btl-nu.vercel.app/api/pad?codice=XXXXXX` ogni 3 secondi.
 Nessun login, nessun cookie.

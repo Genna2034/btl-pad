@@ -34,7 +34,7 @@ const S={on:false,ctx:null,master:null,padBus:null,fxBus:null,shimBus:null,wet:n
   liv:{},loops:{},hold:{},lib:{},usaLib:false,wake:null,
   bg:false,lim:null,flusso:null,bgEl:null,
   segui:false,codice:"",timer:null,ultimoLive:null,
-  idBrano:null,manualeSu:null,titolo:"",fallimenti:0};
+  idBrano:null,manualeSu:null,titolo:"",fallimenti:0,inAttesa:null};
 
 const $=s=>document.querySelector(s),$$=s=>Array.from(document.querySelectorAll(s));
 function toast(m){const t=$("#toast");t.textContent=m;t.classList.add("on");
@@ -71,8 +71,9 @@ async function accendi(){
   S.on=true;
   $("#app").classList.add("live");
   $("#power").classList.add("on");
+  $("#power").classList.remove("chiama");
   $("#pwA").textContent="Acceso";
-  $("#pwC").textContent="scegli una tonalità";
+  $("#pwC").textContent = S.segui ? "in ascolto dal live" : "scegli una tonalità";
   diag();
   const t=S.ctx.currentTime;
   [0,7].forEach((iv,k)=>{
@@ -83,6 +84,10 @@ async function accendi(){
     g.gain.exponentialRampToValueAtTime(.0001,t+1.6);
     o.connect(g);g.connect(S.master);o.start(t+k*.1);o.stop(t+1.7);
   });
+  if(S.inAttesa){                        // il live aveva gia' mandato una tonalita'
+    const a=S.inAttesa; S.inAttesa=null;
+    applicaDaLive(a.t,a.m);
+  }
 }
 function spegni(){
   panico();S.on=false;
@@ -440,8 +445,18 @@ const SCADENZA = 5000;        // oltre questo abbandono la richiesta
 
 function memorizza(){ try{ localStorage.setItem("btlpad.codice",S.codice); }catch(e){} }
 function ripristina(){
-  try{ S.codice = localStorage.getItem("btlpad.codice") || ""; }catch(e){}
+  // il codice puo' arrivare dall'indirizzo: btl-pad.vercel.app/?codice=X9K2M7
+  let daUrl="";
+  try{ daUrl=(new URLSearchParams(location.search).get("codice")||"").trim().toUpperCase(); }catch(e){}
+  if(daUrl.length===6){
+    S.codice=daUrl; memorizza();
+    try{ history.replaceState(null,"",location.pathname); }catch(e){}   // pulisco l'indirizzo
+  } else {
+    try{ S.codice = localStorage.getItem("btlpad.codice") || ""; }catch(e){}
+  }
   const c=$("#codice"); if(c) c.value=S.codice;
+  // codice gia' noto: mi collego da solo, senza far toccare nulla
+  if(S.codice.length===6) collega();
 }
 
 function spia(colore,testo){
@@ -513,7 +528,12 @@ async function interroga(){
 }
 
 function applicaDaLive(t,minore){
-  if(!S.on) return;                                   // audio non ancora sbloccato
+  if(!S.on){                                          // audio non ancora sbloccato dal browser
+    S.inAttesa={t,m:minore};
+    $("#power").classList.add("chiama");
+    $("#pwC").textContent="tocca per accendere · "+NOTE[t][1]+(minore?" minore":" maggiore");
+    return;
+  }
   if(S.ultimoLive && S.ultimoLive.t===t && S.ultimoLive.m===minore) return;  // identica: non tocco nulla
   S.ultimoLive={t,m:minore};
   if(S.min!==minore){
@@ -534,7 +554,7 @@ function collega(){
   S.codice=(c.value||"").trim().toUpperCase();
   if(S.codice.length!==6){ toast("Il codice sessione ha sei caratteri"); return; }
   memorizza();
-  S.segui=true; S.fallimenti=0; S.ultimoLive=null; S.manualeSu=null; S.idBrano=null;
+  S.segui=true; S.fallimenti=0; S.ultimoLive=null; S.manualeSu=null; S.idBrano=null; S.inAttesa=null;
   $("#segui").textContent="smetti di seguire";
   $("#segui").classList.add("on");
   spia("ambra","collegamento…");
@@ -542,7 +562,8 @@ function collega(){
 }
 function scollega(){
   S.segui=false; clearTimeout(S.timer); S.timer=null;
-  S.ultimoLive=null; S.manualeSu=null;
+  S.ultimoLive=null; S.manualeSu=null; S.inAttesa=null;
+  $("#power").classList.remove("chiama");
   $("#segui").textContent="segui il live";
   $("#segui").classList.remove("on");
   spia("","non collegato");        // il pad continua a suonare
