@@ -83,7 +83,17 @@
       <div class="card">
         <div class="fad"><span class="n">Pad</span><input type="range" id="pv" min="0" max="100" value="76"><span class="p" id="pvV">76</span></div>
         <div class="fad"><span class="n">Spazio</span><input type="range" id="rv" min="0" max="100" value="62"><span class="p" id="rvV">62</span></div>
+        <div class="fad"><span class="n">Brillant.</span><input type="range" id="br" min="0" max="100" value="50"><span class="p" id="brV">50</span></div>
+        <div class="fad"><span class="n">Shimmer</span><input type="range" id="sh" min="0" max="100" value="50"><span class="p" id="shV">50</span></div>
         <div class="fad"><span class="n">Dissolv</span><input type="range" id="fd" min="10" max="140" value="45"><span class="p" id="fdV">4.5</span></div>
+      </div>
+
+      <div class="card">
+        <span class="l">Uscita audio</span>
+        <select class="inp sceltauscita" id="uscita"><option value="">uscita predefinita</option></select>
+        <button class="b largo" id="rileva">rileva schede audio</button>
+        <div class="fad"><span class="n">Guadagno</span><input type="range" id="gn" min="0" max="120" value="0"><span class="p" id="gnV">0 dB</span></div>
+        <div class="syncstato" id="uscitaStato"></div>
       </div>
     </section>
 

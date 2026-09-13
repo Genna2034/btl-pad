@@ -153,6 +153,23 @@ avviene con una micro-attenuazione, quindi va attivato prima di iniziare.
 
 ---
 
+## 5-bis. Shimmer: due trappole gia' pagate
+
+1. **Lo shimmer e' assoluto, non proporzionale al timbro.** La prima versione
+   calcolava `base * T.sh * manopola`, per cui sui timbri con `sh` basso (Fondo
+   a 0,05) la manopola non produceva quasi nulla. Ora e' `base * manopola *
+   SHIM_MAX` e ogni timbro parte da una posizione tarata su `T.sh / SHIM_MAX`,
+   cosi' il suono iniziale resta identico ma l'escursione e' piena per tutti.
+
+2. **Registro fisso.** Lo shimmer era costruito a `root + 48 + iv + T.oct*12`:
+   sui timbri con `oct:-1` finiva nella stessa regione dell'accordo e raddoppiava
+   le note invece di brillare sopra. Ora e' `root + 60 + iv`, indipendente dal
+   timbro.
+
+Se si toccano questi valori, rimisurare con Goertzel l'energia a 523, 784 e
+1046 Hz confrontando manopola a 0 e a 100: il rapporto deve superare 2x su
+tutti e sei i timbri.
+
 ## 6. Da fare
 
 - Verificare la modalità sfondo su iPad, su più versioni di iOS.

@@ -160,6 +160,38 @@ funziona. Controlla anche che sulla schermata di blocco compaia BTL Pad con il l
 
 ---
 
+## Brillantezza, Shimmer, Guadagno e uscita audio
+
+**Brillantezza** apre o chiude il filtro del tappeto, da un terzo al triplo del
+valore naturale del timbro: a sinistra il pad si scurisce e si siede sotto la
+band, a destra si apre e prende aria.
+
+**Shimmer** dosa le ottave alte che entrano solo nel riverbero. E' una quantita'
+assoluta: funziona su tutti i timbri, anche su Velluto e Fondo che ne hanno poco
+di loro. La posizione iniziale di ciascun timbro riproduce il suo suono originale.
+
+**Le due manopole hanno una memoria per ogni timbro.** Regoli Velluto come piace
+a te, passi ad Aurora, torni a Velluto e ritrovi i tuoi valori.
+
+**Guadagno** alza il livello fino a +12 dB *prima* del limitatore: il suono
+diventa piu' presente senza mai superare il fondo scala. Spinto al massimo la
+compressione si sente, ma non c'e' distorsione digitale. Verificato: con tutte le
+manopole al massimo il picco resta sotto 0,97.
+
+**Uscita audio.** Il selettore permette di mandare il suono a una scheda audio
+specifica invece che all'uscita di sistema. Tocca **rileva schede audio**: la
+prima volta il browser chiede il permesso per il microfono, perche' senza di
+quello non puo' mostrare i nomi dei dispositivi. Il permesso viene rilasciato
+subito dopo la lettura.
+
+> **Su iPad e iPhone questa funzione non esiste.** Safari su iOS non permette a
+> una pagina web di scegliere l'uscita audio: si sceglie dal sistema, collegando
+> l'interfaccia o dal centro di controllo. Il selettore si disattiva da solo e lo
+> spiega. Il **Guadagno** funziona ovunque.
+
+
+---
+
 ## Collegamento con Be the Light
 
 Il pad puo' seguire la tonalita' del brano attivo nella modalita' live di

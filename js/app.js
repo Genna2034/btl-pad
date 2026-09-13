@@ -14,6 +14,10 @@ const TIMBRI=[
  {n:"Corale",  w:"sawtooth",det:17,oct:0, voci:[0,4,7,12,16],    sub:.12,sh:.20,air:.7,cut:1900,q:.7,lv:.45,atk:1.2}
 ];
 
+/* Lo shimmer e' assoluto: la manopola va da zero a SHIM_MAX per qualunque
+   timbro. La posizione iniziale di ciascuno riproduce il suono originale. */
+const SHIM_MAX=.62;
+
 const COL={amb:"#C2762F",ros:"#B04249",blu:"#3067AE",ver:"#347E5E",vio:"#63479C",tea:"#2A7683"};
 const BANCHI=[
  {n:"Effetti",pads:[
@@ -34,7 +38,9 @@ const S={on:false,ctx:null,master:null,padBus:null,fxBus:null,shimBus:null,wet:n
   liv:{},loops:{},hold:{},lib:{},usaLib:false,wake:null,
   bg:false,lim:null,flusso:null,bgEl:null,
   segui:false,codice:"",timer:null,ultimoLive:null,
-  idBrano:null,manualeSu:null,titolo:"",fallimenti:0,inAttesa:null};
+  idBrano:null,manualeSu:null,titolo:"",fallimenti:0,inAttesa:null,
+  bright:.5,shimmer:.5,parTimbro:TIMBRI.map(T=>({b:.5,s:Math.min(1,T.sh/.62)})),
+  gain:0,uscitaNodo:null,uscitaId:""};
 
 const $=s=>document.querySelector(s),$$=s=>Array.from(document.querySelectorAll(s));
 function toast(m){const t=$("#toast");t.textContent=m;t.classList.add("on");
@@ -154,8 +160,9 @@ function buildAudio(){
   shimBus.gain.value=.9;
   cv.connect(wet);dry.connect(master);wet.connect(master);
   const lim=ctx.createWaveShaper();lim.curve=curvaMorbida(.75);lim.oversample="4x";
-  master.connect(cp);cp.connect(lim);lim.connect(ctx.destination);
-  S.lim=lim;
+  const gn=ctx.createGain();gn.gain.value=Math.pow(10,S.gain/20);
+  master.connect(cp);cp.connect(gn);gn.connect(lim);lim.connect(ctx.destination);
+  S.lim=lim;S.uscitaNodo=gn;
   Object.assign(S,{ctx,master,padBus,fxBus,shimBus,wet});
 }
 
@@ -217,20 +224,25 @@ function makeVoce(root,min,T){
     o.connect(g);g.connect(f);o.start(now);nodi.push(o);
   }
 
-  // shimmer: ottave alte che entrano solo nel riverbero, molto lente
-  if(T.sh>0){
-    [12,19,24].forEach((iv,k)=>{
-      const o=ctx.createOscillator();o.type="sine";
-      o.frequency.value=mtof(root+48+iv+T.oct*12);
-      const g=ctx.createGain();g.gain.value=0;
-      const lv=T.sh*.085/(k*.55+1);
-      g.gain.linearRampToValueAtTime(lv,now+atk*1.9+k*1.1);
-      const sw=ctx.createOscillator();sw.frequency.value=.026+k*.017;
-      const sa=ctx.createGain();sa.gain.value=lv*.75;
-      sw.connect(sa);sa.connect(g.gain);sw.start(now);nodi.push(sw);
-      o.connect(g);g.connect(S.shimBus);o.start(now);nodi.push(o);
-    });
-  }
+  // shimmer: ottave alte che entrano solo nel riverbero, molto lente.
+  // Costruito sempre, anche per i timbri che ne hanno poco: la manopola
+  // deve poterlo aggiungere anche a Velluto o a Fondo.
+  const luciShimmer=[];
+  [12,19,24].forEach((iv,k)=>{
+    const o=ctx.createOscillator();o.type="sine";
+    // registro fisso, indipendente dall'ottava del timbro: lo shimmer deve
+    // sempre stare SOPRA l'accordo, altrimenti raddoppia le note invece di brillare
+    o.frequency.value=mtof(root+60+iv);
+    const g=ctx.createGain();g.gain.value=0;
+    const base=.085/(k*.55+1);                  // livello a manopola tutta aperta
+    const lv=base*S.shimmer*SHIM_MAX;
+    g.gain.linearRampToValueAtTime(lv,now+atk*1.9+k*1.1);
+    const sw=ctx.createOscillator();sw.frequency.value=.026+k*.017;
+    const sa=ctx.createGain();sa.gain.value=lv*.75;
+    sw.connect(sa);sa.connect(g.gain);sw.start(now);nodi.push(sw);
+    o.connect(g);g.connect(S.shimBus);o.start(now);nodi.push(o);
+    luciShimmer.push({g,sa,base});
+  });
 
   // aria: un filo di rumore filtrato altissimo, dà "respiro" al tappeto
   if(T.air>0){
@@ -241,8 +253,11 @@ function makeVoce(root,min,T){
     s.connect(hp);hp.connect(g);g.connect(S.shimBus);s.start(now);nodi.push(s);
   }
 
-  f.frequency.setValueAtTime(Math.max(180,T.cut*.3),now);
-  f.frequency.linearRampToValueAtTime(T.cut,now+atk*1.5);
+  // la manopola sposta il taglio del filtro fra un terzo e il triplo
+  // del valore naturale del timbro
+  const taglio=()=>Math.max(180,Math.min(16000,T.cut*Math.pow(3,(S.bright-.5)*2)));
+  f.frequency.setValueAtTime(Math.max(180,taglio()*.3),now);
+  f.frequency.linearRampToValueAtTime(taglio(),now+atk*1.5);
   out.connect(S.padBus);
 
   return{
@@ -250,6 +265,15 @@ function makeVoce(root,min,T){
       out.gain.setValueAtTime(out.gain.value,t);
       out.gain.linearRampToValueAtTime(T.lv*S.pv,t+s);},
     vol(){out.gain.setTargetAtTime(T.lv*S.pv,S.ctx.currentTime,.1);},
+    brillantezza(){ f.frequency.setTargetAtTime(taglio(),S.ctx.currentTime,.25); },
+    shimmer(){
+      const t=S.ctx.currentTime;
+      luciShimmer.forEach(l=>{
+        const lv=l.base*S.shimmer*SHIM_MAX;
+        l.g.gain.setTargetAtTime(lv,t,.4);      // lento: lo shimmer non deve scattare
+        l.sa.gain.setTargetAtTime(lv*.75,t,.4);
+      });
+    },
     chiudi(s){const t=S.ctx.currentTime;out.gain.cancelScheduledValues(t);
       out.gain.setValueAtTime(out.gain.value,t);
       out.gain.linearRampToValueAtTime(.0001,t+s);
@@ -268,6 +292,7 @@ function makeVoceFile(buf){
     apri(sec){const t=ctx.currentTime;g.gain.cancelScheduledValues(t);
       g.gain.setValueAtTime(g.gain.value,t);g.gain.linearRampToValueAtTime(S.pv,t+sec);},
     vol(){g.gain.setTargetAtTime(S.pv,ctx.currentTime,.1);},
+    brillantezza(){}, shimmer(){},
     chiudi(sec){const t=ctx.currentTime;g.gain.cancelScheduledValues(t);
       g.gain.setValueAtTime(g.gain.value,t);g.gain.linearRampToValueAtTime(.0001,t+sec);
       setTimeout(()=>{try{s.stop();}catch(e){}},sec*1000+300);}
@@ -625,6 +650,9 @@ async function attivaSfondo(){
       S.lim.connect(S.flusso);
     });
     await S.bgEl.play();
+    if(S.uscitaId && typeof S.bgEl.setSinkId==="function"){
+      try{ await S.bgEl.setSinkId(S.uscitaId); }catch(e){}
+    }
     S.bg=true;
     $("#sfondo").classList.add("on");
     preparaComandiSistema();
@@ -683,6 +711,87 @@ function aggiornaSchedaSistema(){
   }catch(e){}
 }
 
+
+/* ============================================================
+   USCITA AUDIO E GUADAGNO
+   Il guadagno agisce PRIMA del limitatore: alzandolo il suono diventa
+   piu' presente senza mai superare il fondo scala. Spinto molto,
+   aggiunge una compressione udibile: e' il compromesso che evita la
+   distorsione digitale.
+   ============================================================ */
+function applicaGuadagno(){
+  if(!S.uscitaNodo) return;
+  S.uscitaNodo.gain.setTargetAtTime(Math.pow(10,S.gain/20),S.ctx.currentTime,.05);
+}
+
+function uscitaSupportata(){
+  return !!(S.ctx && typeof S.ctx.setSinkId==="function") ||
+         (typeof HTMLMediaElement!=="undefined" &&
+          typeof HTMLMediaElement.prototype.setSinkId==="function");
+}
+
+async function rilevaUscite(){
+  const sel=$("#uscita"), stato=$("#uscitaStato");
+  if(!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices){
+    stato.textContent="questo dispositivo non permette di scegliere l'uscita";
+    sel.disabled=true; return;
+  }
+  if(!uscitaSupportata()){
+    stato.textContent="su iPad e iPhone l'uscita si sceglie dal sistema, non da qui";
+    sel.disabled=true; return;
+  }
+  try{
+    let disp=(await navigator.mediaDevices.enumerateDevices())
+               .filter(d=>d.kind==="audiooutput");
+    // senza permesso i nomi sono vuoti: lo chiedo e lo rilascio subito
+    if(disp.length && !disp[0].label){
+      const f=await navigator.mediaDevices.getUserMedia({audio:true});
+      f.getTracks().forEach(t=>t.stop());
+      disp=(await navigator.mediaDevices.enumerateDevices())
+             .filter(d=>d.kind==="audiooutput");
+    }
+    sel.innerHTML='<option value="">uscita predefinita</option>';
+    disp.forEach((d,i)=>{
+      const o=document.createElement("option");
+      o.value=d.deviceId;
+      o.textContent=d.label||("uscita "+(i+1));
+      sel.appendChild(o);
+    });
+    sel.disabled=false;
+    if(S.uscitaId) sel.value=S.uscitaId;
+    stato.textContent=disp.length+" uscite trovate";
+  }catch(e){
+    stato.textContent="permesso negato: non posso leggere i nomi delle schede";
+  }
+}
+
+async function applicaUscita(id){
+  const stato=$("#uscitaStato");
+  try{
+    if(S.ctx && typeof S.ctx.setSinkId==="function") await S.ctx.setSinkId(id||"");
+    if(S.bgEl && typeof S.bgEl.setSinkId==="function") await S.bgEl.setSinkId(id||"");
+    S.uscitaId=id;
+    try{ localStorage.setItem("btlpad.uscita",id||""); }catch(e){}
+    const n=$("#uscita").selectedOptions[0];
+    stato.textContent="uscita: "+((n&&n.textContent)||"predefinita");
+  }catch(e){
+    stato.textContent="non riesco a usare questa uscita";
+  }
+}
+
+/* ---- brillantezza e shimmer, memorizzati per ogni timbro ---- */
+function caricaParametriTimbro(){
+  const p=S.parTimbro[S.tim];
+  S.bright=p.b; S.shimmer=p.s;
+  const b=$("#br"), h=$("#sh");
+  if(b){ b.value=Math.round(S.bright*100); $("#brV").textContent=b.value; }
+  if(h){ h.value=Math.round(S.shimmer*100); $("#shV").textContent=h.value; }
+}
+function salvaParametriTimbro(){
+  S.parTimbro[S.tim]={b:S.bright,s:S.shimmer};
+}
+
+
 /* ================= render ================= */
 function keys(){
   $$(".nk").forEach(k=>k.classList.toggle("on",+k.dataset.i===S.tasto));
@@ -706,6 +815,7 @@ function patch(){
     b.className="pt"+(i===S.tim&&!S.usaLib?" on":"");
     b.innerHTML=`<span class="dot"></span><span class="nm">${T.n}</span>`;
     b.onclick=()=>{S.tim=i;S.usaLib=false;$("#lib").classList.remove("on");
+      caricaParametriTimbro();
       patch();if(S.tasto!==null)suona(S.tasto);};
     w.appendChild(b);
   });
@@ -795,6 +905,17 @@ $("#pv").addEventListener("input",e=>{S.pv=e.target.value/100;$("#pvV").textCont
  if(S.voce)S.voce.vol();});
 $("#rv").addEventListener("input",e=>{S.rv=e.target.value/100;$("#rvV").textContent=e.target.value;
  if(S.wet)S.wet.gain.setTargetAtTime(S.rv,S.ctx.currentTime,.15);});
+$("#br").addEventListener("input",e=>{
+  S.bright=e.target.value/100; $("#brV").textContent=e.target.value;
+  salvaParametriTimbro(); if(S.voce&&S.voce.brillantezza) S.voce.brillantezza();});
+$("#sh").addEventListener("input",e=>{
+  S.shimmer=e.target.value/100; $("#shV").textContent=e.target.value;
+  salvaParametriTimbro(); if(S.voce&&S.voce.shimmer) S.voce.shimmer();});
+$("#gn").addEventListener("input",e=>{
+  S.gain=e.target.value/10; $("#gnV").textContent=(S.gain?"+":"")+S.gain.toFixed(1)+" dB";
+  applicaGuadagno();});
+$("#rileva").addEventListener("click",rilevaUscite);
+$("#uscita").addEventListener("change",e=>applicaUscita(e.target.value));
 $("#fd").addEventListener("input",e=>{S.fade=e.target.value/10;$("#fdV").textContent=S.fade.toFixed(1);});
 $("#stop").onclick=()=>dissolvi();
 $("#panic").onclick=()=>panico();
@@ -825,7 +946,8 @@ document.addEventListener("visibilitychange",()=>{
   if(S.bg&&S.bgEl&&S.bgEl.paused){ S.bgEl.play().catch(()=>{}); }
 });
 
-buildKeys();patch();tabs();grid();mix();keys();diag();ripristina();spia('','non collegato');
+try{ S.uscitaId=localStorage.getItem("btlpad.uscita")||""; }catch(e){}
+buildKeys();patch();tabs();grid();mix();keys();diag();caricaParametriTimbro();ripristina();spia('','non collegato');
 
 /* ---- splash: esce da solo, o al primo tocco ---- */
 (function(){
