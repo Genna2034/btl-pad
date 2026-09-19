@@ -39,7 +39,8 @@ const S={on:false,ctx:null,master:null,padBus:null,fxBus:null,shimBus:null,wet:n
   bg:false,lim:null,flusso:null,bgEl:null,
   segui:false,codice:"",timer:null,ultimoLive:null,
   idBrano:null,manualeSu:null,titolo:"",fallimenti:0,inAttesa:null,
-  bright:.5,shimmer:.5,parTimbro:TIMBRI.map(T=>({b:.5,s:Math.min(1,T.sh/.62)})),
+  bright:.5,shimmer:.5,baseB:.5,baseS:.5,mov:false,movTimer:null,movT0:0,
+  parTimbro:TIMBRI.map(T=>({b:.5,s:Math.min(1,T.sh/.62)})),
   gain:0,uscitaNodo:null,uscitaId:""};
 
 const $=s=>document.querySelector(s),$$=s=>Array.from(document.querySelectorAll(s));
@@ -96,6 +97,7 @@ async function accendi(){
   }
 }
 function spegni(){
+  if(S.mov) fermaMovimento();
   panico();S.on=false;
   $("#app").classList.remove("live");
   $("#power").classList.remove("on");
@@ -782,13 +784,61 @@ async function applicaUscita(id){
 /* ---- brillantezza e shimmer, memorizzati per ogni timbro ---- */
 function caricaParametriTimbro(){
   const p=S.parTimbro[S.tim];
+  S.baseB=p.b; S.baseS=p.s;
   S.bright=p.b; S.shimmer=p.s;
   const b=$("#br"), h=$("#sh");
   if(b){ b.value=Math.round(S.bright*100); $("#brV").textContent=b.value; }
   if(h){ h.value=Math.round(S.shimmer*100); $("#shV").textContent=h.value; }
 }
 function salvaParametriTimbro(){
-  S.parTimbro[S.tim]={b:S.bright,s:S.shimmer};
+  S.parTimbro[S.tim]={b:S.baseB,s:S.baseS};     // si salva il centro, non l'istante
+}
+
+/* ============================================================
+   MOVIMENTO
+   Brillantezza e shimmer oscillano lentamente attorno ai valori
+   scelti dall'utente. Due cicli per manopola, di durata diversa e
+   non commensurabile, cosi' il moto non si ripete mai uguale.
+   I cursori seguono a schermo, ma il centro resta quello impostato.
+   ============================================================ */
+const MOV_PASSO=80;              // ms fra un aggiornamento e l'altro
+const MOV_AMP_B=.22, MOV_AMP_S=.26;
+
+function movimentoValori(t){
+  const b = MOV_AMP_B*(.68*Math.sin(t/23.0) + .32*Math.sin(t/7.3+1.1));
+  const sh= MOV_AMP_S*(.66*Math.sin(t/31.0+2.0) + .34*Math.sin(t/11.7+.4));
+  return {
+    b: Math.max(0,Math.min(1,S.baseB+b)),
+    s: Math.max(0,Math.min(1,S.baseS+sh))
+  };
+}
+function movimentoPasso(){
+  if(!S.mov) return;
+  const t=(Date.now()-S.movT0)/1000;
+  const v=movimentoValori(t);
+  S.bright=v.b; S.shimmer=v.s;
+  if(S.voce){ if(S.voce.brillantezza) S.voce.brillantezza(); if(S.voce.shimmer) S.voce.shimmer(); }
+  const br=$("#br"), sh=$("#sh");
+  if(br){ br.value=Math.round(v.b*100); $("#brV").textContent=br.value; }
+  if(sh){ sh.value=Math.round(v.s*100); $("#shV").textContent=sh.value; }
+}
+function avviaMovimento(){
+  if(!S.on){ accendi(); }
+  S.mov=true; S.movT0=Date.now();
+  clearInterval(S.movTimer);
+  S.movTimer=setInterval(movimentoPasso,MOV_PASSO);
+  $("#mov").classList.add("on");
+  toast("Il tappeto ora respira da solo");
+}
+function fermaMovimento(){
+  S.mov=false; clearInterval(S.movTimer); S.movTimer=null;
+  $("#mov").classList.remove("on");
+  // torno dolcemente al centro impostato
+  S.bright=S.baseB; S.shimmer=S.baseS;
+  if(S.voce){ if(S.voce.brillantezza) S.voce.brillantezza(); if(S.voce.shimmer) S.voce.shimmer(); }
+  const br=$("#br"), sh=$("#sh");
+  if(br){ br.value=Math.round(S.baseB*100); $("#brV").textContent=br.value; }
+  if(sh){ sh.value=Math.round(S.baseS*100); $("#shV").textContent=sh.value; }
 }
 
 
@@ -906,11 +956,14 @@ $("#pv").addEventListener("input",e=>{S.pv=e.target.value/100;$("#pvV").textCont
 $("#rv").addEventListener("input",e=>{S.rv=e.target.value/100;$("#rvV").textContent=e.target.value;
  if(S.wet)S.wet.gain.setTargetAtTime(S.rv,S.ctx.currentTime,.15);});
 $("#br").addEventListener("input",e=>{
-  S.bright=e.target.value/100; $("#brV").textContent=e.target.value;
-  salvaParametriTimbro(); if(S.voce&&S.voce.brillantezza) S.voce.brillantezza();});
+  S.baseB=e.target.value/100; $("#brV").textContent=e.target.value;
+  if(!S.mov){ S.bright=S.baseB; if(S.voce&&S.voce.brillantezza) S.voce.brillantezza(); }
+  salvaParametriTimbro();});
 $("#sh").addEventListener("input",e=>{
-  S.shimmer=e.target.value/100; $("#shV").textContent=e.target.value;
-  salvaParametriTimbro(); if(S.voce&&S.voce.shimmer) S.voce.shimmer();});
+  S.baseS=e.target.value/100; $("#shV").textContent=e.target.value;
+  if(!S.mov){ S.shimmer=S.baseS; if(S.voce&&S.voce.shimmer) S.voce.shimmer(); }
+  salvaParametriTimbro();});
+$("#mov").addEventListener("click",()=>{ S.mov?fermaMovimento():avviaMovimento(); });
 $("#gn").addEventListener("input",e=>{
   S.gain=e.target.value/10; $("#gnV").textContent=(S.gain?"+":"")+S.gain.toFixed(1)+" dB";
   applicaGuadagno();});
