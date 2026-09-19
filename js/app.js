@@ -6,12 +6,12 @@ const NOTE=[["C","Do"],["C#","Do#"],["D","Re"],["D#","Mib"],["E","Mi"],["F","Fa"
 
 /* timbri pensati per il worship: attacchi lenti, molta aria, poco medio */
 const TIMBRI=[
- {n:"Velluto", w:"sawtooth",det:6, oct:-1,voci:[0,7,12,16,19],   sub:.20,sh:.16,air:.5,cut:1250,q:.6,lv:.47,atk:1.0},
- {n:"Aurora",  w:"triangle",det:10,oct:0, voci:[0,7,12,19,24],   sub:.10,sh:.42,air:.9,cut:2600,q:.55,lv:.56,atk:1.4},
- {n:"Cinema",  w:"sawtooth",det:13,oct:-1,voci:[0,7,12,16,19,24],sub:.26,sh:.26,air:.6,cut:980, q:1.0,lv:.50,atk:1.7},
- {n:"Fondo",   w:"sawtooth",det:4, oct:-1,voci:[0,7,12],         sub:.34,sh:.05,air:.2,cut:620, q:1.3,lv:.50,atk:.8},
- {n:"Vetro",   w:"triangle",det:15,oct:0, voci:[0,7,12,16,19,23],sub:.06,sh:.60,air:1.0,cut:4200,q:.5,lv:.52,atk:1.5},
- {n:"Corale",  w:"sawtooth",det:17,oct:0, voci:[0,4,7,12,16],    sub:.12,sh:.20,air:.7,cut:1900,q:.7,lv:.45,atk:1.2}
+ {n:"Velluto", w:"sawtooth",det:5, oct:-1,voci:[0,7,12,16,19],   sub:.22,sh:.16,air:.3,cut:820, q:.5,lv:.47,atk:1.4},
+ {n:"Aurora",  w:"triangle",det:8, oct:0, voci:[0,7,12,19,24],   sub:.12,sh:.42,air:.5,cut:1900,q:.5,lv:.56,atk:1.8},
+ {n:"Cinema",  w:"sawtooth",det:10,oct:-1,voci:[0,7,12,16,19,24],sub:.28,sh:.26,air:.35,cut:700,q:.8,lv:.50,atk:2.2},
+ {n:"Fondo",   w:"sawtooth",det:4, oct:-1,voci:[0,7,12],         sub:.36,sh:.05,air:.1,cut:480, q:1.0,lv:.50,atk:1.1},
+ {n:"Vetro",   w:"triangle",det:12,oct:0, voci:[0,7,12,16,19,23],sub:.08,sh:.60,air:.6,cut:2800,q:.45,lv:.52,atk:2.0},
+ {n:"Corale",  w:"sawtooth",det:13,oct:0, voci:[0,4,7,12,16],    sub:.14,sh:.20,air:.4,cut:1300,q:.6,lv:.45,atk:1.6}
 ];
 
 /* Lo shimmer e' assoluto: la manopola va da zero a SHIM_MAX per qualunque
@@ -174,10 +174,13 @@ function buildAudio(){
   const dry=ctx.createGain();dry.gain.value=1;
 
   // saturazione morbida: toglie la durezza digitale dalle onde a dente di sega
-  const sat=ctx.createWaveShaper();sat.curve=curvaMorbida(.55);sat.oversample="4x";
+  const sat=ctx.createWaveShaper();sat.curve=curvaMorbida(.68);sat.oversample="4x";
 
   const padBus=ctx.createGain(),fxBus=ctx.createGain(),shimBus=ctx.createGain();
-  padBus.connect(sat);sat.connect(dry);sat.connect(cv);
+  // addolcimento: -5 dB sopra i 3,2 kHz, solo sui pad, non sugli effetti
+  const dolce=ctx.createBiquadFilter();dolce.type="highshelf";
+  dolce.frequency.value=3200;dolce.gain.value=-5;
+  padBus.connect(dolce);dolce.connect(sat);sat.connect(dry);sat.connect(cv);
   fxBus.connect(dry);fxBus.connect(cv);
   shimBus.connect(cv);                       // lo shimmer vive solo nel riverbero
   shimBus.gain.value=.9;
@@ -272,7 +275,7 @@ function makeVoce(root,min,T){
     const s=ctx.createBufferSource();s.buffer=nz(ctx,8);s.loop=true;
     const hp=ctx.createBiquadFilter();hp.type="highpass";hp.frequency.value=5200;
     const g=ctx.createGain();g.gain.value=0;
-    g.gain.linearRampToValueAtTime(T.air*.022,now+atk*1.6);
+    g.gain.linearRampToValueAtTime(T.air*.014,now+atk*1.6);
     s.connect(hp);hp.connect(g);g.connect(S.shimBus);s.start(now);nodi.push(s);
   }
 

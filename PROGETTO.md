@@ -153,6 +153,17 @@ avviene con una micro-attenuazione, quindi va attivato prima di iniziare.
 
 ---
 
+## 5-ter. Addolcimento dei timbri
+
+L'utente ha trovato i pad troppo aggressivi. Interventi fatti insieme:
+filtro piu' chiuso (cut ridotto del 30-35%), risonanza Q piu' bassa, detune
+piu' stretto, attacco piu' lento (x1.3), aria a .014, saturazione con ginocchio
+a .68 invece di .55, e un highshelf a -5 dB sopra 3,2 kHz sul solo bus dei pad.
+Misura di riferimento: rapporto energia 2-6 kHz / energia 100-500 Hz, con
+Goertzel sul segnale renderizzato. Velluto e' passato da 3,8 a 1,3 per mille.
+Se un giorno si volesse un timbro piu' brillante, aggiungerne uno nuovo invece
+di riaprire questi.
+
 ## 5-bis. Shimmer: due trappole gia' pagate
 
 1. **Lo shimmer e' assoluto, non proporzionale al timbro.** La prima versione
