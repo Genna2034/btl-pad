@@ -78,6 +78,10 @@ Senza questo, chi ha già aperto l'app continuerebbe a vedere la versione vecchi
 **Accensione.** Il pulsante rotondo sblocca l'audio. È obbligatorio: i browser
 non permettono di riprodurre suono senza un tocco dell'utente.
 
+**Spegnimento.** Ritoccando il pulsante con qualcosa in suono, il pad **dissolve**
+con la durata impostata dal cursore *Dissolv*, e l'app si spegne a dissolvenza
+finita. Un secondo tocco durante la dissolvenza spegne subito.
+
 **Tonalità.** I dodici tasti avviano il tappeto. Ritoccando lo stesso tasto il
 pad sfuma. Cambiando tasto, il vecchio pad chiude mentre il nuovo apre: nessun
 buco. L'interruttore Maggiore/Minore cambia la terza.

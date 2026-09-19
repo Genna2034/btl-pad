@@ -40,6 +40,7 @@ const S={on:false,ctx:null,master:null,padBus:null,fxBus:null,shimBus:null,wet:n
   segui:false,codice:"",timer:null,ultimoLive:null,
   idBrano:null,manualeSu:null,titolo:"",fallimenti:0,inAttesa:null,
   bright:.5,shimmer:.5,baseB:.5,baseS:.5,mov:false,movTimer:null,movT0:0,
+  spegnendo:false,spegniTimer:null,
   parTimbro:TIMBRI.map(T=>({b:.5,s:Math.min(1,T.sh/.62)})),
   gain:0,uscitaNodo:null,uscitaId:""};
 
@@ -96,11 +97,31 @@ async function accendi(){
     applicaDaLive(a.t,a.m);
   }
 }
+/* Lo spegnimento non taglia: dissolve con la durata impostata dall'utente.
+   Un secondo tocco durante la dissolvenza spegne subito. */
 function spegni(){
+  if(S.spegnendo){ spegniSubito(); return; }
+  if(S.mov) fermaMovimento();
+  const suona = S.voce || Object.keys(S.hold).length ||
+                Object.keys(S.loops).some(k=>S.loops[k]&&S.loops[k].src);
+  if(!suona){ spegniSubito(); return; }          // nulla in suono: spengo e basta
+  S.spegnendo=true;
+  const dur=S.fade;
+  $("#pwA").textContent="Spegnimento";
+  $("#pwC").textContent="dissolvenza · tocca ancora per subito";
+  $("#power").classList.add("chiama");
+  dissolvi(dur);
+  Object.keys(S.hold).forEach(k=>stopHold(k,Math.min(dur,3)));
+  Object.keys(S.loops).forEach(k=>{if(S.loops[k]&&S.loops[k].src)stopLoop(k);});
+  S.spegniTimer=setTimeout(spegniSubito, dur*1000+400);
+}
+function spegniSubito(){
+  clearTimeout(S.spegniTimer); S.spegniTimer=null; S.spegnendo=false;
   if(S.mov) fermaMovimento();
   panico();S.on=false;
   $("#app").classList.remove("live");
   $("#power").classList.remove("on");
+  $("#power").classList.remove("chiama");
   $("#pwA").textContent="Accendi";$("#pwC").textContent="tocca per iniziare";
   disattivaSfondo();
   try{if(S.el){S.el.pause();S.el.remove();S.el=null;}}catch(e){}
