@@ -6,12 +6,14 @@ const NOTE=[["C","Do"],["C#","Do#"],["D","Re"],["D#","Mib"],["E","Mi"],["F","Fa"
 
 /* timbri pensati per il worship: attacchi lenti, molta aria, poco medio */
 const TIMBRI=[
- {n:"Velluto", w:"sawtooth",det:5, oct:-1,voci:[0,7,12,16,19],   sub:.22,sh:.16,air:.3,cut:820, q:.5,lv:.47,atk:1.4},
- {n:"Aurora",  w:"triangle",det:8, oct:0, voci:[0,7,12,19,24],   sub:.12,sh:.42,air:.5,cut:1900,q:.5,lv:.56,atk:1.8},
- {n:"Cinema",  w:"sawtooth",det:10,oct:-1,voci:[0,7,12,16,19,24],sub:.28,sh:.26,air:.35,cut:700,q:.8,lv:.50,atk:2.2},
- {n:"Fondo",   w:"sawtooth",det:4, oct:-1,voci:[0,7,12],         sub:.36,sh:.05,air:.1,cut:480, q:1.0,lv:.50,atk:1.1},
- {n:"Vetro",   w:"triangle",det:12,oct:0, voci:[0,7,12,16,19,23],sub:.08,sh:.60,air:.6,cut:2800,q:.45,lv:.52,atk:2.0},
- {n:"Corale",  w:"sawtooth",det:13,oct:0, voci:[0,4,7,12,16],    sub:.14,sh:.20,air:.4,cut:1300,q:.6,lv:.45,atk:1.6}
+ /* w = onda principale (sempre morbida) · velo = quanto dente di sega sotto, 0-1
+    · terzaLv = peso delle note di terza (sono quelle che rendono nasale)   */
+ {n:"Velluto", w:"triangle",velo:.22,det:4, oct:-1,voci:[0,7,12,16,19],   terzaLv:.55,sub:.26,sh:.16,air:.25,cut:900, q:.4, lv:.60,atk:2.6},
+ {n:"Aurora",  w:"triangle",velo:.08,det:5, oct:0, voci:[0,7,12,19,24],   terzaLv:.5, sub:.14,sh:.42,air:.45,cut:1700,q:.4, lv:.62,atk:3.0},
+ {n:"Cinema",  w:"triangle",velo:.30,det:6, oct:-1,voci:[0,7,12,16,19,24],terzaLv:.45,sub:.30,sh:.26,air:.3, cut:760, q:.5, lv:.98,atk:3.6},
+ {n:"Fondo",   w:"sine",    velo:.18,det:3, oct:-1,voci:[0,7,12],         terzaLv:0,  sub:.40,sh:.05,air:.08,cut:520, q:.6, lv:.72,atk:2.0},
+ {n:"Vetro",   w:"sine",    velo:.05,det:7, oct:0, voci:[0,7,12,16,19,23],terzaLv:.45,sub:.10,sh:.60,air:.5, cut:2400,q:.35,lv:.78,atk:3.2},
+ {n:"Corale",  w:"triangle",velo:.15,det:6, oct:0, voci:[0,4,7,12,16],    terzaLv:.6, sub:.16,sh:.20,air:.3, cut:1100,q:.45,lv:.96,atk:2.8}
 ];
 
 /* Lo shimmer e' assoluto: la manopola va da zero a SHIM_MAX per qualunque
@@ -138,7 +140,7 @@ function irBuf(ctx,dur,dec){
     for(let i=0;i<n;i++){
       const t=i/n;
       const raw=(Math.random()*2-1)*Math.pow(1-t,dec);
-      lp=lp*.72+raw*.28;                       // la coda si scurisce col tempo
+      lp=lp*.80+raw*.20;                       // la coda si scurisce col tempo
       const pre=i<ctx.sampleRate*.02?i/(ctx.sampleRate*.02):1;
       d[i]=(lp*1.9)*pre;
     }
@@ -211,35 +213,52 @@ function makeVoce(root,min,T){
   const merge=ctx.createChannelMerger(2);
   for(let i=0;i<3;i++){
     const dl=ctx.createDelay(.06);dl.delayTime.value=.011+i*.008;
-    const lo=ctx.createOscillator();lo.frequency.value=.07+i*.043;
-    const am=ctx.createGain();am.gain.value=.0032;
+    const lo=ctx.createOscillator();lo.frequency.value=.045+i*.03;
+    const am=ctx.createGain();am.gain.value=.0019;
     lo.connect(am);am.connect(dl.delayTime);lo.start(now);nodi.push(lo);
     f.connect(dl);dl.connect(merge,0,i%2);
   }
   f.connect(merge,0,0);f.connect(merge,0,1);
   merge.connect(out);
 
+  // velo: un filtro dedicato, piu' chiuso, per il dente di sega che sta sotto
+  const velo=ctx.createBiquadFilter();velo.type="lowpass";velo.Q.value=.3;
+  velo.frequency.value=Math.max(150,T.cut*.55);
+  const veloG=ctx.createGain();veloG.gain.value=T.velo;
+  velo.connect(veloG);veloG.connect(f);
+
   gradi.forEach((semi,i)=>{
     const midi=root+semi+48+T.oct*12;
+    const eTerza=(semi===terza||semi===12+terza);
     const g=ctx.createGain();
-    const lv=(.66/gradi.length)*(1-i*.045);
+    let lv=(.66/gradi.length)*(1-i*.045);
+    if(eTerza) lv*=T.terzaLv;                        // la terza pesa meno: meno nasale
     g.gain.value=0;
     // ogni nota entra con un tempo suo: nessun attacco "a blocco"
     g.gain.setValueAtTime(0,now);
     g.gain.linearRampToValueAtTime(lv,now+atk*(.55+i*.14));
     // respiro indipendente
     const br=ctx.createOscillator();br.frequency.value=.022+Math.random()*.05;
-    const ba=ctx.createGain();ba.gain.value=lv*.34;
+    const ba=ctx.createGain();ba.gain.value=lv*.30;
     br.connect(ba);ba.connect(g.gain);br.start(now);nodi.push(br);
 
     const pan=ctx.createStereoPanner?ctx.createStereoPanner():null;
-    if(pan){pan.pan.value=(i%2?1:-1)*Math.min(.75,.22+i*.13);g.connect(pan);pan.connect(f);}
+    if(pan){pan.pan.value=(i%2?1:-1)*Math.min(.7,.2+i*.12);g.connect(pan);pan.connect(f);}
     else g.connect(f);
 
+    // onda principale, morbida, due per nota leggermente scordate
     for(let d=-1;d<=1;d+=2){
       const o=ctx.createOscillator();o.type=T.w;o.frequency.value=mtof(midi);
       o.detune.value=d*T.det*(.7+Math.random()*.6);
-      o.connect(g);o.start(now+Math.random()*.06);nodi.push(o);
+      o.connect(g);o.start(now+Math.random()*.08);nodi.push(o);
+    }
+    // velo di dente di sega: uno per nota, attraverso il suo filtro
+    if(T.velo>0){
+      const sg=ctx.createGain();sg.gain.value=0;
+      sg.gain.linearRampToValueAtTime(lv*.9,now+atk*(.7+i*.14));
+      const v=ctx.createOscillator();v.type="sawtooth";v.frequency.value=mtof(midi);
+      v.detune.value=(i%2?1:-1)*T.det*.6;
+      v.connect(sg);sg.connect(velo);v.start(now+Math.random()*.1);nodi.push(v);
     }
   });
 

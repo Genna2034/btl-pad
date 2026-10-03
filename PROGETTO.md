@@ -153,7 +153,22 @@ avviene con una micro-attenuazione, quindi va attivato prima di iniziare.
 
 ---
 
-## 5-ter. Addolcimento dei timbri
+## 5-quater. Motore su onde morbide (ottobre 2026)
+
+Dopo il primo addolcimento l'utente trovava i pad ancora aggressivi. La misura
+giusta non erano gli acuti ma la fascia **1-1,6 kHz (nasale)**: Corale a 131‰,
+Cinema a 70‰ del corpo. Causa: dente di sega come onda principale impastato con
+la terza dell'accordo.
+
+Riscrittura: onda principale sempre morbida (triangolare o sinusoide), dente di
+sega solo come **velo** (campo `velo`, 0-1) attraverso un filtro suo piu' chiuso
+(`cut*.55`), terza con peso ridotto (`terzaLv`), attacchi 2-3,6 s, ensemble piu'
+lento e meno profondo, riverbero piu' scuro. Risultato: Corale 1,5‰, Cinema 22‰,
+Velluto 0,7‰. Velluto e' il timbro di base: deve restare il piu' morbido.
+
+Misura: `tp.mjs` nel banco — energia 1046/1318/1568 Hz su energia 131-523 Hz.
+
+## 5-ter. Addolcimento dei timbri (settembre 2026, superato dal 5-quater)
 
 L'utente ha trovato i pad troppo aggressivi. Interventi fatti insieme:
 filtro piu' chiuso (cut ridotto del 30-35%), risonanza Q piu' bassa, detune
