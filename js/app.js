@@ -8,12 +8,13 @@ const NOTE=[["C","Do"],["C#","Do#"],["D","Re"],["D#","Mib"],["E","Mi"],["F","Fa"
 const TIMBRI=[
  /* w = onda principale (sempre morbida) · velo = quanto dente di sega sotto, 0-1
     · terzaLv = peso delle note di terza (sono quelle che rendono nasale)   */
- {n:"Velluto", w:"triangle",velo:.22,det:4, oct:-1,voci:[0,7,12,16,19],   terzaLv:.55,sub:.26,sh:.16,air:.25,cut:900, q:.4, lv:.60,atk:2.6},
- {n:"Aurora",  w:"triangle",velo:.08,det:5, oct:0, voci:[0,7,12,19,24],   terzaLv:.5, sub:.14,sh:.42,air:.45,cut:1700,q:.4, lv:.62,atk:3.0},
- {n:"Cinema",  w:"triangle",velo:.30,det:6, oct:-1,voci:[0,7,12,16,19,24],terzaLv:.45,sub:.30,sh:.26,air:.3, cut:760, q:.5, lv:.98,atk:3.6},
- {n:"Fondo",   w:"sine",    velo:.18,det:3, oct:-1,voci:[0,7,12],         terzaLv:0,  sub:.40,sh:.05,air:.08,cut:520, q:.6, lv:.72,atk:2.0},
- {n:"Vetro",   w:"sine",    velo:.05,det:7, oct:0, voci:[0,7,12,16,19,23],terzaLv:.45,sub:.10,sh:.60,air:.5, cut:2400,q:.35,lv:.78,atk:3.2},
- {n:"Corale",  w:"triangle",velo:.15,det:6, oct:0, voci:[0,4,7,12,16],    terzaLv:.6, sub:.16,sh:.20,air:.3, cut:1100,q:.45,lv:.96,atk:2.8}
+  {n:"Velluto", w:"triangle",velo:.12,det:4, oct:0, voci:[0,7,12,16,19,24], pesi:[1,.85,.95,.06,.85,.45],
+             terzaLv:1,sub:0,sh:.16,air:.25,cut:900, q:.4, lv:.78,atk:2.8},
+ {n:"Aurora",  w:"triangle",velo:.08,det:5, oct:0, voci:[0,7,12,19,24],   terzaLv:.5, sub:.07,sh:.42,air:.45,cut:1700,q:.4, lv:.62,atk:3.0},
+ {n:"Cinema",  w:"triangle",velo:.30,det:6, oct:-1,voci:[0,7,12,16,19,24],terzaLv:.45,sub:.16,sh:.26,air:.3, cut:760, q:.5, lv:.98,atk:3.6},
+ {n:"Fondo",   w:"sine",    velo:.18,det:3, oct:-1,voci:[0,7,12],         terzaLv:0,  sub:.30,sh:.05,air:.08,cut:520, q:.6, lv:.72,atk:2.0},
+ {n:"Vetro",   w:"sine",    velo:.05,det:7, oct:0, voci:[0,7,12,16,19,23],terzaLv:.45,sub:.05,sh:.60,air:.5, cut:2400,q:.35,lv:.78,atk:3.2},
+ {n:"Corale",  w:"triangle",velo:.15,det:6, oct:0, voci:[0,4,7,12,16],    terzaLv:.6, sub:.08,sh:.20,air:.3, cut:1100,q:.45,lv:.96,atk:2.8}
 ];
 
 /* Lo shimmer e' assoluto: la manopola va da zero a SHIM_MAX per qualunque
@@ -231,8 +232,8 @@ function makeVoce(root,min,T){
     const midi=root+semi+48+T.oct*12;
     const eTerza=(semi===terza||semi===12+terza);
     const g=ctx.createGain();
-    let lv=(.66/gradi.length)*(1-i*.045);
-    if(eTerza) lv*=T.terzaLv;                        // la terza pesa meno: meno nasale
+    let lv=(.66/gradi.length)*(T.pesi ? T.pesi[i] : (1-i*.045));
+    if(eTerza && !T.pesi) lv*=T.terzaLv;             // la terza pesa meno: meno nasale
     g.gain.value=0;
     // ogni nota entra con un tempo suo: nessun attacco "a blocco"
     g.gain.setValueAtTime(0,now);

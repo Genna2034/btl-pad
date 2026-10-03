@@ -153,6 +153,23 @@ avviene con una micro-attenuazione, quindi va attivato prima di iniziare.
 
 ---
 
+## 5-quinquies. Velluto calibrato su un riferimento reale (ottobre 2026)
+
+L'utente ha fornito un pad di riferimento (`E_Pad__3_.mp3`, in Mi, 8 minuti).
+Analizzato con FFT a lungo termine (bande di ottava, dB relativi al totale):
+
+    banda Hz     40-100  100-200  200-400  400-800  800-1600  1600-3200  3200-6400
+    riferimento   -39.1    -5.3     -3.5     -5.9     -28.8      -44.3      -56.9
+    Velluto ora   -73.9    -4.6     -4.1     -5.8     -28.4      -48.7      -71.4
+
+Baricentro 323 Hz (rif.) / 301 Hz (mio). Accordo del riferimento: Mi3 0, Si3 -2,
+Mi4 -1, Si4 -2, Mi5 -8, **terza a -35 dB (praticamente assente)**.
+Scelte che ne derivano, da non toccare senza rimisurare: `oct:0`, `sub:0`,
+`pesi:[1,.85,.95,.06,.85,.45]` sulle voci `[0,7,12,16,19,24]`, `cut:800`.
+
+Strumenti nel banco: `rendi.mjs` (renderizza un timbro in un tasto su wav),
+`analisi.py` (profilo a bande, baricentro, correlazione stereo, note).
+
 ## 5-quater. Motore su onde morbide (ottobre 2026)
 
 Dopo il primo addolcimento l'utente trovava i pad ancora aggressivi. La misura
