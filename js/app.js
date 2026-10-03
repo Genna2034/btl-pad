@@ -1,5 +1,6 @@
 (function(){
 "use strict";
+const VERSIONE_APP="13";
 
 const NOTE=[["C","Do"],["C#","Do#"],["D","Re"],["D#","Mib"],["E","Mi"],["F","Fa"],
             ["F#","Fa#"],["G","Sol"],["G#","Lab"],["A","La"],["A#","Sib"],["B","Si"]];
@@ -64,7 +65,8 @@ function wavMuto(sec){
 }
 let media="—";
 function diag(){
-  $("#diag").innerHTML=S.ctx?`${S.ctx.state} · ${Math.round(S.ctx.sampleRate/100)/10} kHz · media ${media}`:"spento";
+  $("#diag").innerHTML=(S.ctx?`${S.ctx.state} · ${Math.round(S.ctx.sampleRate/100)/10} kHz · media ${media}`:"spento")
+    +` · v${VERSIONE_APP}`;
 }
 
 async function accendi(){
