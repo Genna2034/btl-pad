@@ -36,7 +36,8 @@ Non c'è `npm install`: il progetto non ha dipendenze e non si compila.
 
 - **Niente compilazione.** Sono file statici. Su Vercel: Framework *Other*,
   Build Command e Output Directory **vuoti**.
-- **A ogni modifica va alzata `VERSIONE` in `sw.js`** (`btl-pad-v1` → `v2` → …).
+- **A ogni modifica vanno alzati insieme `VERSIONE` in `sw.js` e `VERSIONE_APP` in `js/app.js`.**
+  Dal v14 l'app si aggiorna da sola (rete-prima sui file vivi, ricarica allo spegnimento).
   Senza questo il service worker continua a servire la versione vecchia dal
   dispositivo e sembra che il deploy non abbia funzionato. È l'errore più
   probabile: controllarlo per primo quando l'utente dice "non è cambiato nulla".

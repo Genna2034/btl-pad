@@ -45,14 +45,13 @@ service worker e per il manifest.
 
 ### Aggiornamenti
 
-Il service worker tiene i file in memoria. Quando cambi qualcosa, **alza il
-numero di versione** in `sw.js`:
+L'app si aggiorna da sola: a ogni apertura con rete prende l'ultima versione
+pubblicata, e se ne arriva una nuova mentre e' in uso la applica allo
+spegnimento, mai durante il suono. Il numero di versione in uso e' nella riga
+di stato in alto a destra (es. `v14`).
 
-```js
-const VERSIONE = 'btl-pad-v2';
-```
-
-Senza questo, chi ha già aperto l'app continuerebbe a vedere la versione vecchia.
+A ogni rilascio vanno alzati insieme `VERSIONE` in `sw.js` e `VERSIONE_APP`
+in `js/app.js`.
 
 ---
 

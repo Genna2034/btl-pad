@@ -1,6 +1,6 @@
 (function(){
 "use strict";
-const VERSIONE_APP="13";
+const VERSIONE_APP="14";
 
 const NOTE=[["C","Do"],["C#","Do#"],["D","Re"],["D#","Mib"],["E","Mi"],["F","Fa"],
             ["F#","Fa#"],["G","Sol"],["G#","Lab"],["A","La"],["A#","Sib"],["B","Si"]];
@@ -132,6 +132,7 @@ function spegniSubito(){
   try{if(S.el){S.el.pause();S.el.remove();S.el=null;}}catch(e){}
   if(S.ctx)S.ctx.suspend();
   media="—";diag();
+  if(aggiornaDopo){ setTimeout(()=>location.reload(),600); }
 }
 
 /* ================= grafo ================= */
@@ -1063,9 +1064,33 @@ buildKeys();patch();tabs();grid();mix();keys();diag();caricaParametriTimbro();ri
 })();
 
 
-/* ---- service worker: rende l'app installabile e utilizzabile offline ---- */
+/* ---- service worker: installabile, offline, e si aggiorna da solo ----
+   Regola: non si ricarica mai mentre c'e' suono. Se arriva una versione
+   nuova durante l'uso, si applica allo spegnimento. */
 if ('serviceWorker' in navigator && location.protocol === 'https:') {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js').catch(() => {});
+  const avevaControllo = !!navigator.serviceWorker.controller;
+  window.addEventListener('load', async () => {
+    try{
+      const reg = await navigator.serviceWorker.register('/sw.js');
+      // controllo aggiornamenti a ogni apertura e a ogni ritorno in primo piano
+      reg.update().catch(()=>{});
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') reg.update().catch(()=>{});
+      });
+      setInterval(() => reg.update().catch(()=>{}), 30*60*1000);
+    }catch(e){}
   });
+  navigator.serviceWorker.addEventListener('message', e => {
+    if (e.data && e.data.tipo === 'nuova-versione') aggiornamentoPronto();
+  });
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (avevaControllo) aggiornamentoPronto();     // non al primissimo avvio
+  });
+}
+let aggiornaDopo = false;
+function aggiornamentoPronto(){
+  if (aggiornaDopo) return;
+  if (!S.on){ location.reload(); return; }         // niente in suono: ricarico subito
+  aggiornaDopo = true;
+  toast("Nuova versione pronta: si applica allo spegnimento");
 }
