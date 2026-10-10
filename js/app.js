@@ -1,6 +1,6 @@
 (function(){
 "use strict";
-const VERSIONE_APP="19";
+const VERSIONE_APP="20";
 
 const NOTE=[["C","Do"],["C#","Do#"],["D","Re"],["D#","Mib"],["E","Mi"],["F","Fa"],
             ["F#","Fa#"],["G","Sol"],["G#","Lab"],["A","La"],["A#","Sib"],["B","Si"]];
@@ -362,6 +362,10 @@ function makeVoceFile(buf, root){
   const mv=stadioMovimento(ctx);
   f.connect(sp); sp.connect(mv.ingresso); mv.uscita.connect(out); out.connect(S.fileBus||S.padBus);
   const vivi=[]; let fermo=false, prox=null;
+  /* Ogni istanza e' programmata sull'orologio audio, esatto al campione, mai su
+     un timer di sistema: cosi' non si apre un buco se l'app finisce in secondo
+     piano. Ne tengo sempre tre in coda: quando una finisce, ne creo un'altra
+     tre passi avanti. */
   function istanza(quando){
     const s=ctx.createBufferSource(); s.buffer=buf;
     const g=ctx.createGain(); g.gain.setValueAtTime(0,quando);
@@ -371,10 +375,11 @@ function makeVoceFile(buf, root){
     for(let k=1;k<=n;k++) g.gain.linearRampToValueAtTime(Math.cos(k/n*Math.PI/2), fine+X*k/n);
     s.connect(g); g.connect(f);
     s.start(quando, 0.05); s.stop(quando+dur+.1);
+    s.onended=()=>{ const i=vivi.indexOf(s); if(i>=0) vivi.splice(i,1);
+                    if(!fermo) istanza(quando+3*(dur-X)); };
     vivi.push(s);
-    if(!fermo) prox=setTimeout(()=>{ if(!fermo) istanza(fine); }, Math.max(0,(fine-ctx.currentTime-1)*1000));
   }
-  istanza(t0);
+  istanza(t0); istanza(t0+dur-X); istanza(t0+2*(dur-X));
 
   // shimmer sintetico sopra il file: ottave alte solo nel riverbero, come nella sintesi
   const luci=[]; const nodi=[];
@@ -400,7 +405,7 @@ function makeVoceFile(buf, root){
     movimento(m){ mv.applica(m); },
     shimmer(){ const t=ctx.currentTime; luci.forEach(l=>{ const lv=l.base*S.shimmer*SHIM_MAX;
       l.g.gain.setTargetAtTime(lv,t,.4); l.sa.gain.setTargetAtTime(lv*.75,t,.4); }); },
-    chiudi(sec){fermo=true; clearTimeout(prox);
+    chiudi(sec){fermo=true;
       const t=ctx.currentTime;out.gain.cancelScheduledValues(t);
       out.gain.setValueAtTime(out.gain.value,t);out.gain.linearRampToValueAtTime(.0001,t+sec);
       setTimeout(()=>{vivi.forEach(x=>{try{x.stop();}catch(e){}});nodi.forEach(x=>{try{x.stop();}catch(e){}});
