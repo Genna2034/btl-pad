@@ -63,6 +63,9 @@ main{flex:1;display:flex;flex-direction:column;gap:10px}
 #power{width:64px;height:64px;border-radius:50%;background:#232C39;border:2px solid #4A5768;
   display:flex;align-items:center;justify-content:center;transition:.35s;pointer-events:auto;flex:0 0 auto}
 #power svg{width:28px;height:28px;stroke:#A9B8C9;stroke-width:2.4;fill:none;stroke-linecap:round;transition:.35s}
+#mov.on{animation:respira 3.2s ease-in-out infinite}
+@keyframes respira{0%,100%{filter:brightness(1)}50%{filter:brightness(1.35);box-shadow:0 0 18px hsl(var(--hue) 70% 54% / .55)}}
+@media (prefers-reduced-motion:reduce){#mov.on{animation:none}}
 #power.chiama{border-color:#E0A020;animation:chiamata 1.6s ease-out infinite}
 #power.chiama svg{stroke:#FFC24D}
 @keyframes chiamata{

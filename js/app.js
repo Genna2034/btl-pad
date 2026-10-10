@@ -1,6 +1,6 @@
 (function(){
 "use strict";
-const VERSIONE_APP="16";
+const VERSIONE_APP="17";
 
 const NOTE=[["C","Do"],["C#","Do#"],["D","Re"],["D#","Mib"],["E","Mi"],["F","Fa"],
             ["F#","Fa#"],["G","Sol"],["G#","Lab"],["A","La"],["A#","Sib"],["B","Si"]];
@@ -921,8 +921,8 @@ const MOV_AMP_B=.22, MOV_AMP_S=.26;
    ripete mai uguale. Il piu' lento governa il filtro (12 s), gli altri il
    volume (8,5 s) e la posizione stereo (19 s). */
 function movimentoValori(t){
-  const b = MOV_AMP_B*(.68*Math.sin(t/23.0) + .32*Math.sin(t/7.3+1.1));
-  const sh= MOV_AMP_S*(.66*Math.sin(t/31.0+2.0) + .34*Math.sin(t/11.7+.4));
+  const b = MOV_AMP_B*(.68*Math.sin(t/12.0) + .32*Math.sin(t/4.1+1.1));
+  const sh= MOV_AMP_S*(.66*Math.sin(t/17.0+2.0) + .34*Math.sin(t/6.3+.4));
   const apertura = .5+.5*(.72*Math.sin(t/12.0) + .28*Math.sin(t/4.7+2.3));   // 0..1
   const ondeggio = .5+.5*Math.sin(t/8.5+1.0);
   return {
@@ -953,11 +953,13 @@ function avviaMovimento(){
   clearInterval(S.movTimer);
   S.movTimer=setInterval(movimentoPasso,MOV_PASSO);
   $("#mov").classList.add("on");
+  $("#mov").textContent="movimento · attivo";
   toast("Il tappeto ora respira da solo");
 }
 function fermaMovimento(){
   S.mov=false; clearInterval(S.movTimer); S.movTimer=null;
   $("#mov").classList.remove("on");
+  $("#mov").textContent="movimento";
   // torno dolcemente al centro impostato
   S.bright=S.baseB; S.shimmer=S.baseS;
   if(S.voce){ if(S.voce.brillantezza) S.voce.brillantezza(); if(S.voce.shimmer) S.voce.shimmer();
