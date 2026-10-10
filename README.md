@@ -110,7 +110,17 @@ nel campo del codice sessione le scorciatoie sono disattivate.
 
 ## Suoni
 
-I pad sono **generati dall'app**, non sono campioni. Questo significa durata
+**Il timbro di base è *Worship*:** dodici pad veri, uno per tonalità, costruiti
+dal pad di riferimento scelto dall'utente. Il segmento più stabile del
+riferimento (23 secondi) è stato trasposto nelle dodici tonalità con Rubber
+Band, chiuso in un loop senza giunzione e pareggiato di livello. Nell'app i
+loop si passano il testimone con tre secondi di dissolvenza incrociata: nessun
+clic, nessuna ripetizione udibile. I file (4 MB) si scaricano all'accensione e
+restano sul dispositivo: funzionano anche senza rete. Su questo timbro
+*Maggiore/Minore* non cambia nulla, perché il riferimento non ha la terza:
+è volutamente ambiguo, come i pad da culto.
+
+Gli altri sei timbri sono **generati dall'app**, non sono campioni. Questo significa durata
 infinita senza ripetizioni udibili, cambio di tonalità istantaneo e nessun file
 da gestire. Il carattere "da culto" nasce da un riverbero lungo con la coda che
 si scurisce, ottave alte che entrano solo nel riverbero, un ensemble di ritardi

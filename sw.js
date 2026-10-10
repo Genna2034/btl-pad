@@ -1,7 +1,7 @@
 /* BTL Pad — service worker
    Alzare VERSIONE a ogni rilascio. Il valore e' letto anche dall'app
    per mostrarlo nella riga di stato. */
-const VERSIONE = 'btl-pad-v14';
+const VERSIONE = 'btl-pad-v15';
 const RISORSE = [
   '/', '/index.html',
   '/css/style.css',
@@ -10,7 +10,10 @@ const RISORSE = [
   '/manifest.webmanifest',
   '/icons/icon-192.png',
   '/icons/icon-512.png',
-  '/icons/apple-touch-icon.png'
+  '/icons/apple-touch-icon.png',
+  /* set Worship: dodici pad, ~4 MB, cosi' il tappeto c'e' anche senza rete */
+  '/pad/C.mp3','/pad/Cs.mp3','/pad/D.mp3','/pad/Ds.mp3','/pad/E.mp3','/pad/F.mp3',
+  '/pad/Fs.mp3','/pad/G.mp3','/pad/Gs.mp3','/pad/A.mp3','/pad/As.mp3','/pad/B.mp3'
 ];
 /* file che cambiano a ogni rilascio: prima la rete, poi la copia */
 const VIVI = ['/', '/index.html', '/css/style.css', '/js/app.js', '/manifest.webmanifest'];

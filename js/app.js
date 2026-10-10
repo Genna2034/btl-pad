@@ -1,6 +1,6 @@
 (function(){
 "use strict";
-const VERSIONE_APP="14";
+const VERSIONE_APP="15";
 
 const NOTE=[["C","Do"],["C#","Do#"],["D","Re"],["D#","Mib"],["E","Mi"],["F","Fa"],
             ["F#","Fa#"],["G","Sol"],["G#","Lab"],["A","La"],["A#","Sib"],["B","Si"]];
@@ -44,6 +44,8 @@ const S={on:false,ctx:null,master:null,padBus:null,fxBus:null,shimBus:null,wet:n
   segui:false,codice:"",timer:null,ultimoLive:null,
   idBrano:null,manualeSu:null,titolo:"",fallimenti:0,inAttesa:null,
   bright:.5,shimmer:.5,baseB:.5,baseS:.5,mov:false,movTimer:null,movT0:0,
+  /* set Worship: i dodici pad costruiti dal riferimento, serviti con l'app */
+  worship:true, wsGrezzi:{}, wsDecod:{}, wsOrdine:[], wsPronto:false,
   spegnendo:false,spegniTimer:null,
   parTimbro:TIMBRI.map(T=>({b:.5,s:Math.min(1,T.sh/.62)})),
   gain:0,uscitaNodo:null,uscitaId:""};
@@ -82,6 +84,7 @@ async function accendi(){
     if(S.ctx.state!=="running") await S.ctx.resume();
   }catch(e){ $("#diag").textContent="errore: "+(e.message||e); return; }
   S.on=true;
+  worshipScarica();
   $("#app").classList.add("live");
   $("#power").classList.add("on");
   $("#power").classList.remove("chiama");
@@ -332,29 +335,88 @@ function makeVoce(root,min,T){
 }
 
 /* voce da file, se hai caricato un set */
-function makeVoceFile(buf){
-  const ctx=S.ctx,t=ctx.currentTime;
-  const s=ctx.createBufferSource();s.buffer=buf;s.loop=true;
-  const g=ctx.createGain();g.gain.value=0;
-  s.connect(g);g.connect(S.padBus);s.start(t,Math.random()*Math.max(0,buf.duration-8));
+function makeVoceFile(buf, root){
+  /* Looper a dissolvenza incrociata: due istanze del file che si passano il
+     testimone con 3 s di sovrapposizione a potenza costante. Assorbe il
+     silenzio aggiunto dalla codifica MP3 ai bordi e non produce mai un clic. */
+  const ctx=S.ctx, t0=ctx.currentTime, X=3, dur=buf.duration;
+  const out=ctx.createGain(); out.gain.value=0;
+  const f=ctx.createBiquadFilter(); f.type="lowpass"; f.Q.value=.3;
+  // da 550 Hz a 8,8 kHz, centro a 2,2 kHz: sopra il contenuto del riferimento,
+  // cosi' al centro il suono resta intatto e a sinistra si scurisce davvero
+  const taglio=()=>Math.max(300,Math.min(20000, 2200*Math.pow(4,(S.bright-.5)*2)));
+  f.frequency.value=taglio();
+  // meta' destra della manopola: spinta sugli acuti fino a +9 dB sopra 1 kHz
+  const sp=ctx.createBiquadFilter(); sp.type="highshelf"; sp.frequency.value=1000;
+  const spinta=()=>Math.max(0,(S.bright-.5)*2)*9;
+  sp.gain.value=spinta();
+  f.connect(sp); sp.connect(out); out.connect(S.padBus);
+  const vivi=[]; let fermo=false, prox=null;
+  function istanza(quando){
+    const s=ctx.createBufferSource(); s.buffer=buf;
+    const g=ctx.createGain(); g.gain.setValueAtTime(0,quando);
+    // entrata a potenza costante lungo X secondi
+    const n=24; for(let k=1;k<=n;k++) g.gain.linearRampToValueAtTime(Math.sin(k/n*Math.PI/2), quando+X*k/n);
+    const fine=quando+dur-X;
+    for(let k=1;k<=n;k++) g.gain.linearRampToValueAtTime(Math.cos(k/n*Math.PI/2), fine+X*k/n);
+    s.connect(g); g.connect(f);
+    s.start(quando, 0.05); s.stop(quando+dur+.1);
+    vivi.push(s);
+    if(!fermo) prox=setTimeout(()=>{ if(!fermo) istanza(fine); }, Math.max(0,(fine-ctx.currentTime-1)*1000));
+  }
+  istanza(t0);
+
+  // shimmer sintetico sopra il file: ottave alte solo nel riverbero, come nella sintesi
+  const luci=[]; const nodi=[];
+  if(root!==undefined){
+    [12,19,24].forEach((iv,k)=>{
+      const o=ctx.createOscillator(); o.type="sine"; o.frequency.value=mtof(root+60+iv);
+      const g=ctx.createGain(); g.gain.value=0;
+      const base=.085/(k*.55+1);
+      g.gain.linearRampToValueAtTime(base*S.shimmer*SHIM_MAX, t0+5+k*1.1);
+      const sw=ctx.createOscillator(); sw.frequency.value=.026+k*.017;
+      const sa=ctx.createGain(); sa.gain.value=base*S.shimmer*SHIM_MAX*.75;
+      sw.connect(sa); sa.connect(g.gain); sw.start(t0); nodi.push(sw);
+      o.connect(g); g.connect(S.shimBus); o.start(t0); nodi.push(o);
+      luci.push({g,sa,base});
+    });
+  }
   return{
-    apri(sec){const t=ctx.currentTime;g.gain.cancelScheduledValues(t);
-      g.gain.setValueAtTime(g.gain.value,t);g.gain.linearRampToValueAtTime(S.pv,t+sec);},
-    vol(){g.gain.setTargetAtTime(S.pv,ctx.currentTime,.1);},
-    brillantezza(){}, shimmer(){},
-    chiudi(sec){const t=ctx.currentTime;g.gain.cancelScheduledValues(t);
-      g.gain.setValueAtTime(g.gain.value,t);g.gain.linearRampToValueAtTime(.0001,t+sec);
-      setTimeout(()=>{try{s.stop();}catch(e){}},sec*1000+300);}
+    apri(sec){const t=ctx.currentTime;out.gain.cancelScheduledValues(t);
+      out.gain.setValueAtTime(out.gain.value,t);out.gain.linearRampToValueAtTime(S.pv*1.05,t+sec);},
+    vol(){out.gain.setTargetAtTime(S.pv*1.05,ctx.currentTime,.1);},
+    brillantezza(){ f.frequency.setTargetAtTime(taglio(),ctx.currentTime,.25);
+      sp.gain.setTargetAtTime(spinta(),ctx.currentTime,.25); },
+    shimmer(){ const t=ctx.currentTime; luci.forEach(l=>{ const lv=l.base*S.shimmer*SHIM_MAX;
+      l.g.gain.setTargetAtTime(lv,t,.4); l.sa.gain.setTargetAtTime(lv*.75,t,.4); }); },
+    chiudi(sec){fermo=true; clearTimeout(prox);
+      const t=ctx.currentTime;out.gain.cancelScheduledValues(t);
+      out.gain.setValueAtTime(out.gain.value,t);out.gain.linearRampToValueAtTime(.0001,t+sec);
+      setTimeout(()=>{vivi.forEach(x=>{try{x.stop();}catch(e){}});nodi.forEach(x=>{try{x.stop();}catch(e){}});
+        try{out.disconnect();}catch(e){}},sec*1000+300);}
   };
 }
 
 function suona(i){
-  const useFile=S.usaLib&&S.lib[i];
-  const v=useFile?makeVoceFile(S.lib[i]):makeVoce(i,S.min,TIMBRI[S.tim]);
+  const useLib=S.usaLib&&S.lib[i];
+  if(S.worship && !useLib){
+    const seq=++suona.seq;
+    worshipBuffer(i).then(buf=>{
+      if(seq!==suona.seq) return;                      // nel frattempo e' cambiata tonalita'
+      if(!buf){ S.worship=false; patch(); suona(i); return; }
+      avviaVoce(makeVoceFile(buf,i), i, "worship");
+    });
+    return;
+  }
+  avviaVoce(useLib?makeVoceFile(S.lib[i]):makeVoce(i,S.min,TIMBRI[S.tim]), i,
+            useLib?"set caricato":TIMBRI[S.tim].n.toLowerCase());
+}
+suona.seq=0;
+function avviaVoce(v,i,etichetta){
   if(S.voce)S.voce.chiudi(S.fade);
   S.voce=v;v.apri(Math.max(1,S.fade));
   S.tasto=i;keys();hue(i);aggiornaSchedaSistema();
-  $("#pwC").textContent=useFile?"set caricato":TIMBRI[S.tim].n.toLowerCase();
+  $("#pwC").textContent=etichetta;
 }
 function dissolvi(s){
   if(!S.voce)return;
@@ -751,7 +813,7 @@ function aggiornaSchedaSistema(){
     if(window.MediaMetadata){
       navigator.mediaSession.metadata=new MediaMetadata({
         title:"BTL Pad — "+tonalita,
-        artist: S.usaLib ? "Il tuo set" : TIMBRI[S.tim].n,
+        artist: S.usaLib ? "Il tuo set" : (S.worship ? "Worship" : TIMBRI[S.tim].n),
         album:"Be the Light",
         artwork:[{src:"/logo.png",sizes:"440x440",type:"image/png"}]
       });
@@ -889,6 +951,35 @@ function fermaMovimento(){
 }
 
 
+
+/* ============================================================
+   SET WORSHIP
+   Dodici pad costruiti dal riferimento fornito dall'utente, uno per
+   tonalita', serviti con l'app (cartella /pad). I file compressi si
+   scaricano all'accensione (4 MB); ogni tonalita' si decodifica alla
+   prima richiesta e resta in memoria, al massimo quattro per volta.
+   ============================================================ */
+const WS_NOMI=["C","Cs","D","Ds","E","F","Fs","G","Gs","A","As","B"];
+async function worshipScarica(){
+  if(S.wsPronto) return;
+  let ok=0;
+  await Promise.all(WS_NOMI.map(async(n,k)=>{
+    try{ const r=await fetch("/pad/"+n+".mp3",{cache:"force-cache"});
+         if(r.ok){ S.wsGrezzi[k]=await r.arrayBuffer(); ok++; } }catch(e){}
+  }));
+  S.wsPronto = ok===12;
+  if(!S.wsPronto && ok>0) toast("Set Worship incompleto: "+ok+" tonalità su 12");
+  if(ok===0){ S.worship=false; patch(); toast("Set Worship non disponibile: uso la sintesi"); }
+}
+async function worshipBuffer(k){
+  if(S.wsDecod[k]) { S.wsOrdine=S.wsOrdine.filter(x=>x!==k); S.wsOrdine.push(k); return S.wsDecod[k]; }
+  const grezzo=S.wsGrezzi[k]; if(!grezzo) return null;
+  const b=await S.ctx.decodeAudioData(grezzo.slice(0));
+  S.wsDecod[k]=b; S.wsOrdine.push(k);
+  while(S.wsOrdine.length>4){ const v=S.wsOrdine.shift(); if(v!==S.tasto) delete S.wsDecod[v]; }
+  return b;
+}
+
 /* ================= render ================= */
 function keys(){
   $$(".nk").forEach(k=>k.classList.toggle("on",+k.dataset.i===S.tasto));
@@ -907,22 +998,19 @@ function buildKeys(){
 }
 function patch(){
   const w=$("#patch");w.innerHTML="";
-  TIMBRI.forEach((T,i)=>{
+  const voce=(nome,attivo,onclick)=>{
     const b=document.createElement("button");
-    b.className="pt"+(i===S.tim&&!S.usaLib?" on":"");
-    b.innerHTML=`<span class="dot"></span><span class="nm">${T.n}</span>`;
-    b.onclick=()=>{S.tim=i;S.usaLib=false;$("#lib").classList.remove("on");
-      caricaParametriTimbro();
-      patch();if(S.tasto!==null)suona(S.tasto);};
-    w.appendChild(b);
-  });
-  if(Object.keys(S.lib).length){
-    const b=document.createElement("button");
-    b.className="pt"+(S.usaLib?" on":"");
-    b.innerHTML=`<span class="dot"></span><span class="nm">Il tuo set</span>`;
-    b.onclick=()=>{S.usaLib=true;patch();if(S.tasto!==null)suona(S.tasto);};
-    w.appendChild(b);
-  }
+    b.className="pt"+(attivo?" on":"");
+    b.innerHTML=`<span class="dot"></span><span class="nm">${nome}</span>`;
+    b.onclick=onclick; w.appendChild(b);
+  };
+  voce("Worship", S.worship&&!S.usaLib, ()=>{S.worship=true;S.usaLib=false;$("#lib").classList.remove("on");
+    patch();if(S.tasto!==null)suona(S.tasto);});
+  TIMBRI.forEach((T,i)=>voce(T.n, i===S.tim&&!S.usaLib&&!S.worship, ()=>{
+    S.tim=i;S.usaLib=false;S.worship=false;$("#lib").classList.remove("on");
+    caricaParametriTimbro();patch();if(S.tasto!==null)suona(S.tasto);}));
+  if(Object.keys(S.lib).length)
+    voce("Il tuo set", S.usaLib, ()=>{S.usaLib=true;patch();if(S.tasto!==null)suona(S.tasto);});
 }
 function pads(){
   const b=BANCHI[S.ban];

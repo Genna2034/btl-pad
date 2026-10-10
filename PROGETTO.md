@@ -154,6 +154,23 @@ avviene con una micro-attenuazione, quindi va attivato prima di iniziare.
 
 ---
 
+## 5-sexies. Set Worship da file (ottobre 2026) — ORA IL TIMBRO DI BASE
+
+Dopo tre giri di sintesi l'utente continuava a trovare i pad aggressivi. La
+risposta definitiva: usare il suo riferimento. Pipeline (in `/home/claude`, da
+ricreare): decodifica `E_Pad__3_.mp3` → finestra di 28 s piu' stabile (217-245 s)
+→ Rubber Band per le 12 tonalita' (spostamento minimo, A# a -6, B a -5) →
+dissolvenza incrociata di 5 s coda/testa → rms pareggiato sul Mi → MP3 128k in
+`/pad/<nota>.mp3` (4,3 MB). Il riferimento ha strati a +3/-7/+22 cent: e' il suo
+chorus, non un errore di trasposizione (verificato con sinusoide pura).
+
+In app: `worshipScarica()` all'accensione, `worshipBuffer(k)` decodifica alla
+prima richiesta (al massimo 4 in memoria), `makeVoceFile(buf, root)` e' un looper
+a doppia istanza con 3 s di sovrapposizione (assorbe il silenzio di testa/coda
+dell'MP3), piu' passa-basso 550-8800 Hz e shelf +9 dB sopra 1 kHz per la
+brillantezza, e shimmer sintetico sopra. Se i file mancano, ripiega su Velluto.
+Precache nel service worker.
+
 ## 5-quinquies. Velluto calibrato su un riferimento reale (ottobre 2026)
 
 L'utente ha fornito un pad di riferimento (`E_Pad__3_.mp3`, in Mi, 8 minuti).
