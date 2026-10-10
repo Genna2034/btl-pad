@@ -1,6 +1,6 @@
 (function(){
 "use strict";
-const VERSIONE_APP="18";
+const VERSIONE_APP="19";
 
 const NOTE=[["C","Do"],["C#","Do#"],["D","Re"],["D#","Mib"],["E","Mi"],["F","Fa"],
             ["F#","Fa#"],["G","Sol"],["G#","Lab"],["A","La"],["A#","Sib"],["B","Si"]];
@@ -688,6 +688,8 @@ function applicaDaLive(t,minore){
     $$("#mode button").forEach(b=>b.classList.toggle("on",(b.dataset.m==="1")===minore));
   }
   suona(t);                                           // usa la dissolvenza scelta dall'utente
+  // ogni canto del live entra chiuso e si apre: movimento acceso, fase riportata all'inizio
+  if(S.mov) S.movT0=Date.now(); else avviaMovimento();
 }
 
 function ciclo(){
@@ -925,20 +927,22 @@ function salvaParametriTimbro(){
 const MOV_PASSO=80;              // ms fra un aggiornamento e l'altro
 const MOV_AMP_B=.22, MOV_AMP_S=.26;
 
-/* Tre respiri sovrapposti, di periodo non commensurabile: cosi' il moto non si
-   ripete mai uguale. Il piu' lento governa il filtro (12 s), gli altri il
-   volume (8,5 s) e la posizione stereo (19 s). */
+/* Respiri sovrapposti di periodo diverso, cosi' il moto non si ripete mai uguale.
+   All'avvio (t=0) tutto e' CHIUSO: brillantezza a zero, filtro chiuso. Poi si
+   apre: il primo picco arriva dopo 12 secondi. */
+const P=(t,periodo,fase=0)=>Math.cos(2*Math.PI*t/periodo+fase);
 function movimentoValori(t){
-  const b = MOV_AMP_B*(.68*Math.sin(t/12.0) + .32*Math.sin(t/4.1+1.1));
-  const sh= MOV_AMP_S*(.66*Math.sin(t/17.0+2.0) + .34*Math.sin(t/6.3+.4));
-  const apertura = .5+.5*(.72*Math.sin(t/12.0) + .28*Math.sin(t/4.7+2.3));   // 0..1
-  const ondeggio = .5+.5*Math.sin(t/8.5+1.0);
+  // da 0 fino a 2 volte il centro impostato (al massimo 1): con il centro a 50 copre tutto
+  const b = S.baseB*(1-(.7*P(t,24)+.3*P(t,8)));
+  const sh= Math.max(0,S.baseS*(1-(.7*P(t,34)+.3*P(t,12))));
+  const apertura = .5-.5*(.72*P(t,24)+.28*P(t,9));          // 0 all'avvio, 1 dopo 12 s
+  const ondeggio = .5-.5*P(t,17);
   return {
-    b: Math.max(0,Math.min(1,S.baseB+b)),
-    s: Math.max(0,Math.min(1,S.baseS+sh)),
-    taglio: 420*Math.pow(7000/420, apertura),      // da 420 Hz a 7 kHz: si sente su tutto
+    b: Math.max(0,Math.min(1,b)),
+    s: Math.max(0,Math.min(1,sh)),
+    taglio: 420*Math.pow(7000/420, apertura),      // da 420 Hz a 7 kHz
     guadagno: .84+.16*ondeggio,                     // ±0,75 dB circa
-    pan: .32*Math.sin(t/19.0)
+    pan: .32*Math.sin(2*Math.PI*t/38)
   };
 }
 function movimentoPasso(){
