@@ -186,13 +186,13 @@ di loro. La posizione iniziale di ciascun timbro riproduce il suo suono original
 **Le due manopole hanno una memoria per ogni timbro.** Regoli Velluto come piace
 a te, passi ad Aurora, torni a Velluto e ritrovi i tuoi valori.
 
-**Movimento** (pulsante sotto le due manopole) fa oscillare da sole brillantezza
-e shimmer attorno ai valori che hai impostato, con cicli lenti di durata diversa:
-il tappeto respira senza ripetersi mai uguale. Con il centro a 50, in due minuti
-la brillantezza spazia da circa 29 a 70. I cursori seguono a schermo; spostandone
-uno mentre e' acceso sposti il centro del moto. Spegnendolo, tutto torna ai valori
-impostati. E' pensato per i momenti lunghi di adorazione, dove un pad fermo
-diventa piatto.
+**Movimento** (pulsante sotto le due manopole) fa respirare il tappeto da solo:
+un filtro che si apre e si chiude fra 420 Hz e 7 kHz ogni dodici secondi circa,
+un lieve ondeggiare di volume e una deriva stereo da un lato all'altro, su cicli
+di durata diversa cosi' il moto non si ripete mai uguale. Funziona su tutti i
+timbri, Worship compreso. Brillantezza e shimmer oscillano anch'essi attorno ai
+valori impostati e i cursori seguono a schermo; spegnendolo, tutto torna com'era.
+E' pensato per i momenti lunghi di adorazione, dove un pad fermo diventa piatto.
 
 **Guadagno** alza il livello fino a +12 dB *prima* del limitatore: il suono
 diventa piu' presente senza mai superare il fondo scala. Spinto al massimo la

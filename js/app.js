@@ -1,6 +1,6 @@
 (function(){
 "use strict";
-const VERSIONE_APP="15";
+const VERSIONE_APP="16";
 
 const NOTE=[["C","Do"],["C#","Do#"],["D","Re"],["D#","Mib"],["E","Mi"],["F","Fa"],
             ["F#","Fa#"],["G","Sol"],["G#","Lab"],["A","La"],["A#","Sib"],["B","Si"]];
@@ -226,7 +226,8 @@ function makeVoce(root,min,T){
     f.connect(dl);dl.connect(merge,0,i%2);
   }
   f.connect(merge,0,0);f.connect(merge,0,1);
-  merge.connect(out);
+  const mv=stadioMovimento(ctx);
+  merge.connect(mv.ingresso); mv.uscita.connect(out);
 
   // velo: un filtro dedicato, piu' chiuso, per il dente di sega che sta sotto
   const velo=ctx.createBiquadFilter();velo.type="lowpass";velo.Q.value=.3;
@@ -318,6 +319,7 @@ function makeVoce(root,min,T){
       out.gain.linearRampToValueAtTime(T.lv*S.pv,t+s);},
     vol(){out.gain.setTargetAtTime(T.lv*S.pv,S.ctx.currentTime,.1);},
     brillantezza(){ f.frequency.setTargetAtTime(taglio(),S.ctx.currentTime,.25); },
+    movimento(m){ mv.applica(m); },
     shimmer(){
       const t=S.ctx.currentTime;
       luciShimmer.forEach(l=>{
@@ -350,7 +352,8 @@ function makeVoceFile(buf, root){
   const sp=ctx.createBiquadFilter(); sp.type="highshelf"; sp.frequency.value=1000;
   const spinta=()=>Math.max(0,(S.bright-.5)*2)*9;
   sp.gain.value=spinta();
-  f.connect(sp); sp.connect(out); out.connect(S.padBus);
+  const mv=stadioMovimento(ctx);
+  f.connect(sp); sp.connect(mv.ingresso); mv.uscita.connect(out); out.connect(S.padBus);
   const vivi=[]; let fermo=false, prox=null;
   function istanza(quando){
     const s=ctx.createBufferSource(); s.buffer=buf;
@@ -387,6 +390,7 @@ function makeVoceFile(buf, root){
     vol(){out.gain.setTargetAtTime(S.pv*1.05,ctx.currentTime,.1);},
     brillantezza(){ f.frequency.setTargetAtTime(taglio(),ctx.currentTime,.25);
       sp.gain.setTargetAtTime(spinta(),ctx.currentTime,.25); },
+    movimento(m){ mv.applica(m); },
     shimmer(){ const t=ctx.currentTime; luci.forEach(l=>{ const lv=l.base*S.shimmer*SHIM_MAX;
       l.g.gain.setTargetAtTime(lv,t,.4); l.sa.gain.setTargetAtTime(lv*.75,t,.4); }); },
     chiudi(sec){fermo=true; clearTimeout(prox);
@@ -913,12 +917,20 @@ function salvaParametriTimbro(){
 const MOV_PASSO=80;              // ms fra un aggiornamento e l'altro
 const MOV_AMP_B=.22, MOV_AMP_S=.26;
 
+/* Tre respiri sovrapposti, di periodo non commensurabile: cosi' il moto non si
+   ripete mai uguale. Il piu' lento governa il filtro (12 s), gli altri il
+   volume (8,5 s) e la posizione stereo (19 s). */
 function movimentoValori(t){
   const b = MOV_AMP_B*(.68*Math.sin(t/23.0) + .32*Math.sin(t/7.3+1.1));
   const sh= MOV_AMP_S*(.66*Math.sin(t/31.0+2.0) + .34*Math.sin(t/11.7+.4));
+  const apertura = .5+.5*(.72*Math.sin(t/12.0) + .28*Math.sin(t/4.7+2.3));   // 0..1
+  const ondeggio = .5+.5*Math.sin(t/8.5+1.0);
   return {
     b: Math.max(0,Math.min(1,S.baseB+b)),
-    s: Math.max(0,Math.min(1,S.baseS+sh))
+    s: Math.max(0,Math.min(1,S.baseS+sh)),
+    taglio: 420*Math.pow(7000/420, apertura),      // da 420 Hz a 7 kHz: si sente su tutto
+    guadagno: .84+.16*ondeggio,                     // ±0,75 dB circa
+    pan: .32*Math.sin(t/19.0)
   };
 }
 function movimentoPasso(){
@@ -926,7 +938,11 @@ function movimentoPasso(){
   const t=(Date.now()-S.movT0)/1000;
   const v=movimentoValori(t);
   S.bright=v.b; S.shimmer=v.s;
-  if(S.voce){ if(S.voce.brillantezza) S.voce.brillantezza(); if(S.voce.shimmer) S.voce.shimmer(); }
+  if(S.voce){
+    if(S.voce.brillantezza) S.voce.brillantezza();
+    if(S.voce.shimmer) S.voce.shimmer();
+    if(S.voce.movimento) S.voce.movimento(v);
+  }
   const br=$("#br"), sh=$("#sh");
   if(br){ br.value=Math.round(v.b*100); $("#brV").textContent=br.value; }
   if(sh){ sh.value=Math.round(v.s*100); $("#shV").textContent=sh.value; }
@@ -944,7 +960,8 @@ function fermaMovimento(){
   $("#mov").classList.remove("on");
   // torno dolcemente al centro impostato
   S.bright=S.baseB; S.shimmer=S.baseS;
-  if(S.voce){ if(S.voce.brillantezza) S.voce.brillantezza(); if(S.voce.shimmer) S.voce.shimmer(); }
+  if(S.voce){ if(S.voce.brillantezza) S.voce.brillantezza(); if(S.voce.shimmer) S.voce.shimmer();
+              if(S.voce.movimento) S.voce.movimento(null); }
   const br=$("#br"), sh=$("#sh");
   if(br){ br.value=Math.round(S.baseB*100); $("#brV").textContent=br.value; }
   if(sh){ sh.value=Math.round(S.baseS*100); $("#shV").textContent=sh.value; }
@@ -978,6 +995,28 @@ async function worshipBuffer(k){
   S.wsDecod[k]=b; S.wsOrdine.push(k);
   while(S.wsOrdine.length>4){ const v=S.wsOrdine.shift(); if(v!==S.tasto) delete S.wsDecod[v]; }
   return b;
+}
+
+
+/* Stadio di movimento: un filtro che respira, un lieve ondeggiare di volume e
+   una deriva stereo. A riposo e' trasparente (filtro aperto, guadagno 1,
+   centro). Lo usano sia le voci sintetiche sia quelle da file. */
+function stadioMovimento(ctx){
+  const f=ctx.createBiquadFilter(); f.type="lowpass"; f.Q.value=.6; f.frequency.value=20000;
+  const g=ctx.createGain(); g.gain.value=1;
+  const p=ctx.createStereoPanner?ctx.createStereoPanner():null;
+  f.connect(g); if(p){ g.connect(p); }
+  return {
+    ingresso:f, uscita:(p||g),
+    applica(m){
+      const t=ctx.currentTime;
+      if(!m){ f.frequency.setTargetAtTime(20000,t,.6); g.gain.setTargetAtTime(1,t,.6);
+              if(p) p.pan.setTargetAtTime(0,t,.6); return; }
+      f.frequency.setTargetAtTime(m.taglio,t,.12);
+      g.gain.setTargetAtTime(m.guadagno,t,.12);
+      if(p) p.pan.setTargetAtTime(m.pan,t,.12);
+    }
+  };
 }
 
 /* ================= render ================= */
