@@ -190,8 +190,9 @@ a te, passi ad Aurora, torni a Velluto e ritrovi i tuoi valori.
 **Parte chiuso** — brillantezza a zero, filtro a 420 Hz — e si apre: il primo
 picco arriva dopo dodici secondi, poi continua a respirare su cicli di 24, 34,
 17 e 38 secondi, di durata diversa cosi' il moto non si ripete mai uguale. La
-brillantezza spazia da zero fino al doppio del centro impostato (con il cursore
-a 50, da 0 a 100); c'e' anche un lieve ondeggiare di volume e una deriva stereo.
+brillantezza va da zero fino al centro impostato, mai oltre (sopra il centro
+spingerebbe gli acuti fino a saturare); c'e' anche un lieve ondeggiare di volume
+e una deriva stereo.
 Funziona su tutti i timbri, Worship compreso. I cursori seguono a schermo;
 spegnendolo, tutto torna com'era.
 

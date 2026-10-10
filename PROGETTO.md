@@ -154,7 +154,18 @@ avviene con una micro-attenuazione, quindi va attivato prima di iniziare.
 
 ---
 
-## 5-septies. Catena pulita per i pad da file (ottobre 2026)
+## 5-octies. RITIRATA la catena pulita: vale il suono della v15 (10 ottobre 2026)
+
+La via "pulita" del 5-septies coincideva con l'MP3 entro 0,3 dB, ma l'utente
+preferisce il suono della v15 (padBus: addolcimento, saturazione, riverbero
+pieno, shimmer 26, passa-basso a 2,2 kHz al centro). Lezione: la fedelta' al
+riferimento non e' il criterio; lo e' l'orecchio dell'utente. Inoltre il
+Movimento spingeva la brillantezza fino a 100 (+9 dB sugli acuti) e mandava in
+saturazione: ora va da chiuso fino al centro, mai oltre. Per confrontare con la
+v15: `git archive 19dd114` in /home/claude/v15 e `banco15.mjs`.
+Il looper a tre istanze sull'orologio audio (v20) resta: era un difetto vero.
+
+## 5-septies. Catena pulita per i pad da file (ottobre 2026) — RITIRATA, vedi 5-octies
 
 Misura: riferimento vs uscita dell'app (bande di ottava, `analisi.py`). I loop e
 gli MP3 erano identici al riferimento entro 0,3 dB; la perdita stava nella catena

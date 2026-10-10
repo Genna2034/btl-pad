@@ -1,6 +1,6 @@
 (function(){
 "use strict";
-const VERSIONE_APP="20";
+const VERSIONE_APP="21";
 
 const NOTE=[["C","Do"],["C#","Do#"],["D","Re"],["D#","Mib"],["E","Mi"],["F","Fa"],
             ["F#","Fa#"],["G","Sol"],["G#","Lab"],["A","La"],["A#","Sib"],["B","Si"]];
@@ -46,7 +46,7 @@ const S={on:false,ctx:null,master:null,padBus:null,fxBus:null,shimBus:null,wet:n
   bright:.5,shimmer:.5,baseB:.5,baseS:.5,mov:false,movTimer:null,movT0:0,
   /* set Worship: i dodici pad costruiti dal riferimento, serviti con l'app */
   worship:true, wsGrezzi:{}, wsDecod:{}, wsOrdine:[], wsPronto:false,
-  parWorship:{b:.5,s:0},        /* il riferimento non ha shimmer: parte a zero */
+  parWorship:{b:.5,s:.26},      /* come nella v15, il suono che e' piaciuto */
   spegnendo:false,spegniTimer:null,
   parTimbro:TIMBRI.map(T=>({b:.5,s:Math.min(1,T.sh/.62)})),
   gain:0,uscitaNodo:null,uscitaId:""};
@@ -353,14 +353,14 @@ function makeVoceFile(buf, root){
   const f=ctx.createBiquadFilter(); f.type="lowpass"; f.Q.value=.3;
   // da 550 Hz a 8,8 kHz, centro a 2,2 kHz: sopra il contenuto del riferimento,
   // cosi' al centro il suono resta intatto e a sinistra si scurisce davvero
-  const taglio=()=> S.bright>=.5 ? 20000 : Math.max(300, 500*Math.pow(40, S.bright*2));
+  const taglio=()=>Math.max(300,Math.min(20000, 2200*Math.pow(4,(S.bright-.5)*2)));
   f.frequency.value=taglio();
   // meta' destra della manopola: spinta sugli acuti fino a +9 dB sopra 1 kHz
   const sp=ctx.createBiquadFilter(); sp.type="highshelf"; sp.frequency.value=1000;
   const spinta=()=>Math.max(0,(S.bright-.5)*2)*9;
   sp.gain.value=spinta();
   const mv=stadioMovimento(ctx);
-  f.connect(sp); sp.connect(mv.ingresso); mv.uscita.connect(out); out.connect(S.fileBus||S.padBus);
+  f.connect(sp); sp.connect(mv.ingresso); mv.uscita.connect(out); out.connect(S.padBus);
   const vivi=[]; let fermo=false, prox=null;
   /* Ogni istanza e' programmata sull'orologio audio, esatto al campione, mai su
      un timer di sistema: cosi' non si apre un buco se l'app finisce in secondo
@@ -937,9 +937,10 @@ const MOV_AMP_B=.22, MOV_AMP_S=.26;
    apre: il primo picco arriva dopo 12 secondi. */
 const P=(t,periodo,fase=0)=>Math.cos(2*Math.PI*t/periodo+fase);
 function movimentoValori(t){
-  // da 0 fino a 2 volte il centro impostato (al massimo 1): con il centro a 50 copre tutto
-  const b = S.baseB*(1-(.7*P(t,24)+.3*P(t,8)));
-  const sh= Math.max(0,S.baseS*(1-(.7*P(t,34)+.3*P(t,12))));
+  // da chiuso (0) fino al centro impostato, mai oltre: sopra il centro la brillantezza
+  // spinge gli acuti e manda in saturazione
+  const b = S.baseB*.5*(1-(.7*P(t,24)+.3*P(t,8)));
+  const sh= Math.max(0,S.baseS*.5*(1-(.7*P(t,34)+.3*P(t,12))));
   const apertura = .5-.5*(.72*P(t,24)+.28*P(t,9));          // 0 all'avvio, 1 dopo 12 s
   const ondeggio = .5-.5*P(t,17);
   return {
