@@ -154,6 +154,17 @@ avviene con una micro-attenuazione, quindi va attivato prima di iniziare.
 
 ---
 
+## 5-septies. Catena pulita per i pad da file (ottobre 2026)
+
+Misura: riferimento vs uscita dell'app (bande di ottava, `analisi.py`). I loop e
+gli MP3 erano identici al riferimento entro 0,3 dB; la perdita stava nella catena
+dell'app: addolcimento (-5 dB > 3,2 kHz) + saturazione + riverbero sintetico +
+shimmer di base a 50 (tre sinusoidi fra 660 e 1320 Hz). Ora i pad da file
+passano per `S.fileBus` (niente dolce/sat, riverbero al 16%), la brillantezza al
+centro e' trasparente (passa-basso aperto), e Worship ha parametri propri
+(`S.parWorship`, shimmer 0). Risultato: ±0,3 dB su tutte le bande, stereo 0,29
+contro 0,32. Non toccare questa via senza rimisurare con `rendiws.mjs`.
+
 ## 5-sexies. Set Worship da file (ottobre 2026) — ORA IL TIMBRO DI BASE
 
 Dopo tre giri di sintesi l'utente continuava a trovare i pad aggressivi. La

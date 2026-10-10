@@ -1,7 +1,7 @@
 /* BTL Pad — service worker
    Alzare VERSIONE a ogni rilascio. Il valore e' letto anche dall'app
    per mostrarlo nella riga di stato. */
-const VERSIONE = 'btl-pad-v17';
+const VERSIONE = 'btl-pad-v18';
 const RISORSE = [
   '/', '/index.html',
   '/css/style.css',

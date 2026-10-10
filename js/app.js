@@ -1,6 +1,6 @@
 (function(){
 "use strict";
-const VERSIONE_APP="17";
+const VERSIONE_APP="18";
 
 const NOTE=[["C","Do"],["C#","Do#"],["D","Re"],["D#","Mib"],["E","Mi"],["F","Fa"],
             ["F#","Fa#"],["G","Sol"],["G#","Lab"],["A","La"],["A#","Sib"],["B","Si"]];
@@ -46,6 +46,7 @@ const S={on:false,ctx:null,master:null,padBus:null,fxBus:null,shimBus:null,wet:n
   bright:.5,shimmer:.5,baseB:.5,baseS:.5,mov:false,movTimer:null,movT0:0,
   /* set Worship: i dodici pad costruiti dal riferimento, serviti con l'app */
   worship:true, wsGrezzi:{}, wsDecod:{}, wsOrdine:[], wsPronto:false,
+  parWorship:{b:.5,s:0},        /* il riferimento non ha shimmer: parte a zero */
   spegnendo:false,spegniTimer:null,
   parTimbro:TIMBRI.map(T=>({b:.5,s:Math.min(1,T.sh/.62)})),
   gain:0,uscitaNodo:null,uscitaId:""};
@@ -191,6 +192,12 @@ function buildAudio(){
   dolce.frequency.value=3200;dolce.gain.value=-5;
   padBus.connect(dolce);dolce.connect(sat);sat.connect(dry);sat.connect(cv);
   fxBus.connect(dry);fxBus.connect(cv);
+  // i pad da file hanno gia' il loro riverbero e il loro equilibrio: passano puliti,
+  // e prendono solo il 16% del riverbero dell'app
+  const fileBus=ctx.createGain();
+  const fileCv=ctx.createGain();fileCv.gain.value=.16;
+  fileBus.connect(dry);fileBus.connect(fileCv);fileCv.connect(cv);
+  S.fileBus=fileBus;
   shimBus.connect(cv);                       // lo shimmer vive solo nel riverbero
   shimBus.gain.value=.9;
   cv.connect(wet);dry.connect(master);wet.connect(master);
@@ -346,14 +353,14 @@ function makeVoceFile(buf, root){
   const f=ctx.createBiquadFilter(); f.type="lowpass"; f.Q.value=.3;
   // da 550 Hz a 8,8 kHz, centro a 2,2 kHz: sopra il contenuto del riferimento,
   // cosi' al centro il suono resta intatto e a sinistra si scurisce davvero
-  const taglio=()=>Math.max(300,Math.min(20000, 2200*Math.pow(4,(S.bright-.5)*2)));
+  const taglio=()=> S.bright>=.5 ? 20000 : Math.max(300, 500*Math.pow(40, S.bright*2));
   f.frequency.value=taglio();
   // meta' destra della manopola: spinta sugli acuti fino a +9 dB sopra 1 kHz
   const sp=ctx.createBiquadFilter(); sp.type="highshelf"; sp.frequency.value=1000;
   const spinta=()=>Math.max(0,(S.bright-.5)*2)*9;
   sp.gain.value=spinta();
   const mv=stadioMovimento(ctx);
-  f.connect(sp); sp.connect(mv.ingresso); mv.uscita.connect(out); out.connect(S.padBus);
+  f.connect(sp); sp.connect(mv.ingresso); mv.uscita.connect(out); out.connect(S.fileBus||S.padBus);
   const vivi=[]; let fermo=false, prox=null;
   function istanza(quando){
     const s=ctx.createBufferSource(); s.buffer=buf;
@@ -896,7 +903,7 @@ async function applicaUscita(id){
 
 /* ---- brillantezza e shimmer, memorizzati per ogni timbro ---- */
 function caricaParametriTimbro(){
-  const p=S.parTimbro[S.tim];
+  const p=S.worship?S.parWorship:S.parTimbro[S.tim];
   S.baseB=p.b; S.baseS=p.s;
   S.bright=p.b; S.shimmer=p.s;
   const b=$("#br"), h=$("#sh");
@@ -904,7 +911,8 @@ function caricaParametriTimbro(){
   if(h){ h.value=Math.round(S.shimmer*100); $("#shV").textContent=h.value; }
 }
 function salvaParametriTimbro(){
-  S.parTimbro[S.tim]={b:S.baseB,s:S.baseS};     // si salva il centro, non l'istante
+  const v={b:S.baseB,s:S.baseS};                 // si salva il centro, non l'istante
+  if(S.worship) S.parWorship=v; else S.parTimbro[S.tim]=v;
 }
 
 /* ============================================================
@@ -1046,7 +1054,7 @@ function patch(){
     b.onclick=onclick; w.appendChild(b);
   };
   voce("Worship", S.worship&&!S.usaLib, ()=>{S.worship=true;S.usaLib=false;$("#lib").classList.remove("on");
-    patch();if(S.tasto!==null)suona(S.tasto);});
+    caricaParametriTimbro();patch();if(S.tasto!==null)suona(S.tasto);});
   TIMBRI.forEach((T,i)=>voce(T.n, i===S.tim&&!S.usaLib&&!S.worship, ()=>{
     S.tim=i;S.usaLib=false;S.worship=false;$("#lib").classList.remove("on");
     caricaParametriTimbro();patch();if(S.tasto!==null)suona(S.tasto);}));
