@@ -1,6 +1,6 @@
 (function(){
 "use strict";
-const VERSIONE_APP="21";
+const VERSIONE_APP="22";
 
 const NOTE=[["C","Do"],["C#","Do#"],["D","Re"],["D#","Mib"],["E","Mi"],["F","Fa"],
             ["F#","Fa#"],["G","Sol"],["G#","Lab"],["A","La"],["A#","Sib"],["B","Si"]];
@@ -49,7 +49,7 @@ const S={on:false,ctx:null,master:null,padBus:null,fxBus:null,shimBus:null,wet:n
   parWorship:{b:.5,s:.26},      /* come nella v15, il suono che e' piaciuto */
   spegnendo:false,spegniTimer:null,
   parTimbro:TIMBRI.map(T=>({b:.5,s:Math.min(1,T.sh/.62)})),
-  gain:0,uscitaNodo:null,uscitaId:""};
+  gain:0,uscitaNodo:null,uscitaId:"",masterDb:0};
 
 const $=s=>document.querySelector(s),$$=s=>Array.from(document.querySelectorAll(s));
 function toast(m){const t=$("#toast");t.textContent=m;t.classList.add("on");
@@ -202,7 +202,7 @@ function buildAudio(){
   shimBus.gain.value=.9;
   cv.connect(wet);dry.connect(master);wet.connect(master);
   const lim=ctx.createWaveShaper();lim.curve=curvaMorbida(.75);lim.oversample="4x";
-  const gn=ctx.createGain();gn.gain.value=Math.pow(10,S.gain/20);
+  const gn=ctx.createGain();gn.gain.value=Math.pow(10,S.masterDb/20);
   master.connect(cp);cp.connect(gn);gn.connect(lim);lim.connect(ctx.destination);
   S.lim=lim;S.uscitaNodo=gn;
   Object.assign(S,{ctx,master,padBus,fxBus,shimBus,wet});
@@ -848,10 +848,15 @@ function aggiornaSchedaSistema(){
    aggiunge una compressione udibile: e' il compromesso che evita la
    distorsione digitale.
    ============================================================ */
-function applicaGuadagno(){
+/* Master in dB: da -60 (silenzio) a +12. Siede prima del limitatore, come il
+   vecchio guadagno, cosi' spingere non puo' mai superare il fondo scala. */
+function applicaMaster(){
   if(!S.uscitaNodo) return;
-  S.uscitaNodo.gain.setTargetAtTime(Math.pow(10,S.gain/20),S.ctx.currentTime,.05);
+  const lin = S.masterDb<=-60 ? 0 : Math.pow(10,S.masterDb/20);
+  S.uscitaNodo.gain.setTargetAtTime(lin,S.ctx.currentTime,.03);
 }
+function applicaGuadagno(){ applicaMaster(); }
+function testoDb(v){ return v<=-60 ? "−∞ dB" : (v>0?"+":"")+v.toFixed(1)+" dB"; }
 
 function uscitaSupportata(){
   return !!(S.ctx && typeof S.ctx.setSinkId==="function") ||
@@ -1145,8 +1150,6 @@ $("#lib").addEventListener("click",()=>{ if(!S.on){accendi();return;} caricaSet(
 $$("#mode button").forEach(b=>b.onclick=()=>{
   $$("#mode button").forEach(x=>x.classList.remove("on"));b.classList.add("on");
   S.min=b.dataset.m==="1";keys();if(S.tasto!==null)suona(S.tasto);});
-$("#pv").addEventListener("input",e=>{S.pv=e.target.value/100;$("#pvV").textContent=e.target.value;
- if(S.voce)S.voce.vol();});
 $("#rv").addEventListener("input",e=>{S.rv=e.target.value/100;$("#rvV").textContent=e.target.value;
  if(S.wet)S.wet.gain.setTargetAtTime(S.rv,S.ctx.currentTime,.15);});
 $("#br").addEventListener("input",e=>{
@@ -1158,9 +1161,12 @@ $("#sh").addEventListener("input",e=>{
   if(!S.mov){ S.shimmer=S.baseS; if(S.voce&&S.voce.shimmer) S.voce.shimmer(); }
   salvaParametriTimbro();});
 $("#mov").addEventListener("click",()=>{ S.mov?fermaMovimento():avviaMovimento(); });
-$("#gn").addEventListener("input",e=>{
-  S.gain=e.target.value/10; $("#gnV").textContent=(S.gain?"+":"")+S.gain.toFixed(1)+" dB";
-  applicaGuadagno();});
+$("#mst").addEventListener("input",e=>{
+  S.masterDb=+e.target.value; $("#mstV").textContent=testoDb(S.masterDb);
+  applicaMaster(); try{ localStorage.setItem("btlpad.master",String(S.masterDb)); }catch(x){}
+});
+// doppio tocco sul fader: torna a 0 dB, come in Logic
+$("#mst").addEventListener("dblclick",()=>{ const e=$("#mst"); e.value=0; e.dispatchEvent(new Event("input",{bubbles:true})); });
 $("#rileva").addEventListener("click",rilevaUscite);
 $("#uscita").addEventListener("change",e=>applicaUscita(e.target.value));
 $("#fd").addEventListener("input",e=>{S.fade=e.target.value/10;$("#fdV").textContent=S.fade.toFixed(1);});
@@ -1194,6 +1200,7 @@ document.addEventListener("visibilitychange",()=>{
 });
 
 try{ S.uscitaId=localStorage.getItem("btlpad.uscita")||""; }catch(e){}
+try{ const m=parseFloat(localStorage.getItem("btlpad.master")); if(!isNaN(m)){ S.masterDb=Math.max(-60,Math.min(12,m)); const e=$("#mst"); if(e){ e.value=S.masterDb; $("#mstV").textContent=testoDb(S.masterDb); } } }catch(e){}
 buildKeys();patch();tabs();grid();mix();keys();diag();caricaParametriTimbro();ripristina();spia('','non collegato');
 
 /* ---- splash: esce da solo, o al primo tocco ---- */

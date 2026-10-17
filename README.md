@@ -88,8 +88,13 @@ buco. L'interruttore Maggiore/Minore cambia la terza.
 **Timbri.** Sei caratteri diversi, dal più caldo al più cristallino:
 Velluto, Aurora, Cinema, Fondo, Vetro, Corale.
 
-**Cursori.** *Pad* è il volume del tappeto, *Spazio* dosa il riverbero,
-*Dissolv* regola la durata dell'incrocio fra tonalità (da 1 a 14 secondi).
+**Master.** Il fader in alto a destra, in decibel come su un mixer: da −∞ a
++12 dB, con 0 dB segnato in ambra. Un doppio tocco lo riporta a 0. Il valore
+resta salvato sul dispositivo. Sopra 0 dB il limitatore impedisce comunque di
+superare il fondo scala.
+
+**Cursori.** *Spazio* dosa il riverbero, *Dissolv* regola la durata
+dell'incrocio fra tonalità (da 1 a 14 secondi).
 
 **Effetti.** Sei colpi singoli (Salita, Colpo, Respiro, Luce, Campana, Sub) e due
 continui che restano accesi finché non li ritocchi (Vento, Battito).
@@ -199,11 +204,6 @@ spegnendolo, tutto torna com'era.
 **Nel live parte da solo:** quando arriva una tonalita' da Be the Light il
 movimento si accende, e a ogni nuovo canto riparte da chiuso, cosi' ogni brano
 entra con un'apertura.
-
-**Guadagno** alza il livello fino a +12 dB *prima* del limitatore: il suono
-diventa piu' presente senza mai superare il fondo scala. Spinto al massimo la
-compressione si sente, ma non c'e' distorsione digitale. Verificato: con tutte le
-manopole al massimo il picco resta sotto 0,97.
 
 **Uscita audio.** Il selettore permette di mandare il suono a una scheda audio
 specifica invece che all'uscita di sistema. Tocca **rileva schede audio**: la
