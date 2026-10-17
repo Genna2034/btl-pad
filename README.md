@@ -214,7 +214,7 @@ subito dopo la lettura.
 > **Su iPad e iPhone questa funzione non esiste.** Safari su iOS non permette a
 > una pagina web di scegliere l'uscita audio: si sceglie dal sistema, collegando
 > l'interfaccia o dal centro di controllo. Il selettore si disattiva da solo e lo
-> spiega. Il **Guadagno** funziona ovunque.
+> spiega. Il fader **Master** funziona ovunque.
 
 
 ---
