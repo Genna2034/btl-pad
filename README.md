@@ -219,6 +219,29 @@ subito dopo la lettura.
 
 ---
 
+## Pad condiviso
+
+Con un codice sessione, **tutti i dispositivi che lo inseriscono vedono e muovono
+lo stesso pad**: tonalità, maggiore/minore, timbro, Master, Spazio, Dissolv,
+Brillantezza, Shimmer, Movimento, Dissolvi e Stop. Chi tocca un comando lo cambia
+per tutti, e gli altri lo vedono aggiornarsi entro un paio di secondi. Serve
+quando chi suona dal palco non si rende conto di come arriva il tappeto in sala:
+il fonico abbassa il Master dal suo telefono e sul palco il fader scende da solo.
+
+Una sola regola: **vince l'ultimo tocco**. Non ci sono ruoli né permessi.
+
+Dettagli pratici:
+- Lettura ogni 2 secondi; scrittura solo quando qualcuno tocca un comando,
+  raggruppata cosi' un fader trascinato manda un invio solo.
+- L'audio non passa mai dalla rete: ogni dispositivo suona in locale. Un
+  dispositivo che non ha ancora acceso l'audio vede lo stato e, al tocco
+  dell'accensione, parte nella tonalità condivisa.
+- Senza rete ognuno continua in locale e si riallinea quando torna.
+- Il set caricato con **SET** è locale: se un dispositivo lo usa, gli altri che
+  non ce l'hanno restano sul timbro che avevano.
+- Endpoint: `GET`/`POST` `/api/pad/stato?codice=…` su Be the Light. Il codice
+  deve essere una sessione live valida.
+
 ## Collegamento con Be the Light
 
 Il pad puo' seguire la tonalita' del brano attivo nella modalita' live di

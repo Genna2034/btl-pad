@@ -1,6 +1,6 @@
 (function(){
 "use strict";
-const VERSIONE_APP="22";
+const VERSIONE_APP="23";
 
 const NOTE=[["C","Do"],["C#","Do#"],["D","Re"],["D#","Mib"],["E","Mi"],["F","Fa"],
             ["F#","Fa#"],["G","Sol"],["G#","Lab"],["A","La"],["A#","Sib"],["B","Si"]];
@@ -49,7 +49,10 @@ const S={on:false,ctx:null,master:null,padBus:null,fxBus:null,shimBus:null,wet:n
   parWorship:{b:.5,s:.26},      /* come nella v15, il suono che e' piaciuto */
   spegnendo:false,spegniTimer:null,
   parTimbro:TIMBRI.map(T=>({b:.5,s:Math.min(1,T.sh/.62)})),
-  gain:0,uscitaNodo:null,uscitaId:"",masterDb:0};
+  gain:0,uscitaNodo:null,uscitaId:"",masterDb:0,
+  /* pad condiviso: tutti i dispositivi con lo stesso codice vedono e muovono lo stesso pad */
+  cond:{timer:null,ultimoVisto:null,ultimoInviato:null,scrittura:null,applicando:false,
+        dispositivo:null,errori:0}};
 
 const $=s=>document.querySelector(s),$$=s=>Array.from(document.querySelectorAll(s));
 function toast(m){const t=$("#toast");t.textContent=m;t.classList.add("on");
@@ -695,6 +698,7 @@ function applicaDaLive(t,minore){
   suona(t);                                           // usa la dissolvenza scelta dall'utente
   // ogni canto del live entra chiuso e si apre: movimento acceso, fase riportata all'inizio
   if(S.mov) S.movT0=Date.now(); else avviaMovimento();
+  condTocco();
 }
 
 function ciclo(){
@@ -712,10 +716,10 @@ function collega(){
   $("#segui").textContent="smetti di seguire";
   $("#segui").classList.add("on");
   spia("ambra","collegamento…");
-  ciclo();
+  ciclo(); condAvvia();
 }
 function scollega(){
-  S.segui=false; clearTimeout(S.timer); S.timer=null;
+  S.segui=false; clearTimeout(S.timer); S.timer=null; condFerma();
   S.ultimoLive=null; S.manualeSu=null; S.inAttesa=null;
   $("#power").classList.remove("chiama");
   $("#segui").textContent="segui il live";
@@ -730,6 +734,118 @@ function manualeHaPriorita(){
   S.manualeSu = S.idBrano || "senza-brano";
   spia("verde",(S.titolo||"collegato")+" · scelta manuale");
 }
+
+
+/* ============================================================
+   PAD CONDIVISO
+   Con un codice sessione, tutti i dispositivi vedono lo stesso pad:
+   chi tocca un comando lo cambia per tutti, e vince l'ultimo tocco.
+   Lettura ogni 2 s; scrittura solo quando qualcuno tocca qualcosa,
+   raggruppata in 400 ms cosi' un fader trascinato manda un invio solo.
+   La rete puo' solo aggiungere: senza rete ognuno continua in locale.
+   ============================================================ */
+const COND_OGNI = 2000;
+const COND_RAGGRUPPA = 400;
+
+function condId(){
+  if(S.cond.dispositivo) return S.cond.dispositivo;
+  let id=null; try{ id=localStorage.getItem("btlpad.dispositivo"); }catch(e){}
+  if(!id){ id=Math.random().toString(36).slice(2,10); try{ localStorage.setItem("btlpad.dispositivo",id); }catch(e){} }
+  return (S.cond.dispositivo=id);
+}
+
+/* lo stato che viaggia: solo ciò che ha senso condividere */
+function condFoto(){
+  return {
+    v:1, da:condId(), t:Date.now(),
+    tasto:S.tasto, min:S.min,
+    timbro: S.usaLib ? "lib" : (S.worship ? "worship" : S.tim),
+    master:S.masterDb, spazio:S.rv, fade:S.fade,
+    bright:S.baseB, shimmer:S.baseS, mov:S.mov
+  };
+}
+
+/* applica uno stato arrivato dalla rete, toccando solo cio' che e' diverso */
+function condApplica(f){
+  if(!f || typeof f!=="object" || f.v!==1) return;
+  if(f.da===condId()) return;                          // e' il mio stesso stato, riflesso
+  S.cond.applicando=true;
+  try{
+    const imp=(id,val,testo)=>{const e=$(id); if(e){ e.value=val; const v=$(id+"V"); if(v) v.textContent=testo; }};
+    if(typeof f.master==="number" && f.master!==S.masterDb){
+      S.masterDb=Math.max(-60,Math.min(12,f.master)); imp("#mst",S.masterDb,testoDb(S.masterDb)); applicaMaster(); }
+    if(typeof f.spazio==="number" && f.spazio!==S.rv){
+      S.rv=f.spazio; imp("#rv",Math.round(S.rv*100),String(Math.round(S.rv*100)));
+      if(S.wet) S.wet.gain.setTargetAtTime(S.rv,S.ctx.currentTime,.15); }
+    if(typeof f.fade==="number" && f.fade!==S.fade){ S.fade=f.fade; imp("#fd",Math.round(S.fade*10),S.fade.toFixed(1)); }
+    if(typeof f.bright==="number" && f.bright!==S.baseB){ S.baseB=f.bright; if(!S.mov){S.bright=S.baseB; if(S.voce&&S.voce.brillantezza) S.voce.brillantezza();}
+      imp("#br",Math.round(S.baseB*100),String(Math.round(S.baseB*100))); salvaParametriTimbro(); }
+    if(typeof f.shimmer==="number" && f.shimmer!==S.baseS){ S.baseS=f.shimmer; if(!S.mov){S.shimmer=S.baseS; if(S.voce&&S.voce.shimmer) S.voce.shimmer();}
+      imp("#sh",Math.round(S.baseS*100),String(Math.round(S.baseS*100))); salvaParametriTimbro(); }
+
+    let risuona=false;
+    if(f.timbro!==undefined){
+      const w=(f.timbro==="worship"), lib=(f.timbro==="lib");
+      const tim=(typeof f.timbro==="number")?f.timbro:S.tim;
+      if(w!==S.worship || lib!==S.usaLib || tim!==S.tim){
+        if(lib && !Object.keys(S.lib).length){ /* non ho il suo set: resto come sono */ }
+        else { S.worship=w; S.usaLib=lib; S.tim=tim; caricaParametriTimbro(); patch(); risuona=true; }
+      }
+    }
+    if(typeof f.min==="boolean" && f.min!==S.min){
+      S.min=f.min; $$("#mode button").forEach(b=>b.classList.toggle("on",(b.dataset.m==="1")===S.min)); risuona=true; }
+    if(f.tasto!==S.tasto){
+      if(f.tasto===null || f.tasto===undefined){ if(S.voce) dissolvi(); }
+      else if(S.on){ suona(f.tasto); risuona=false; }
+      else { S.inAttesa={t:f.tasto,m:S.min}; $("#power").classList.add("chiama");
+             $("#pwC").textContent="tocca per accendere · "+NOTE[f.tasto][1]+(S.min?" minore":" maggiore"); }
+    } else if(risuona && S.tasto!==null && S.on){ suona(S.tasto); }
+
+    if(typeof f.mov==="boolean" && f.mov!==S.mov){ if(f.mov){ if(S.on) avviaMovimento(); } else fermaMovimento(); }
+  } finally { S.cond.applicando=false; }
+}
+
+async function condLeggi(){
+  if(!S.segui || !S.codice) return;
+  const ab=new AbortController(); const sc=setTimeout(()=>ab.abort(),SCADENZA);
+  try{
+    const r=await fetch(BTL+"/api/pad/stato?codice="+encodeURIComponent(S.codice),
+                        {signal:ab.signal,cache:"no-store",credentials:"omit"});
+    clearTimeout(sc);
+    if(r.status===404){ return; }                       // codice non valido: ci pensa gia' interroga()
+    if(!r.ok) throw new Error("HTTP "+r.status);
+    const j=await r.json();
+    S.cond.errori=0;
+    if(!j || !j.aggiornatoIl) return;                    // mai scritto nulla: nulla da applicare
+    if(j.aggiornatoIl===S.cond.ultimoVisto) return;      // identico all'ultima lettura
+    S.cond.ultimoVisto=j.aggiornatoIl;
+    condApplica(j.stato);
+  }catch(e){ clearTimeout(sc); S.cond.errori++; }
+}
+
+/* chiamata a ogni tocco locale: raggruppa e invia */
+function condTocco(){
+  if(!S.segui || !S.codice || S.cond.applicando) return;
+  clearTimeout(S.cond.scrittura);
+  S.cond.scrittura=setTimeout(condScrivi,COND_RAGGRUPPA);
+}
+async function condScrivi(){
+  if(!S.segui || !S.codice) return;
+  const foto=condFoto(); S.cond.ultimoInviato=foto;
+  try{
+    const r=await fetch(BTL+"/api/pad/stato",{method:"POST",cache:"no-store",credentials:"omit",
+      headers:{"Content-Type":"text/plain"},            // niente preflight
+      body:JSON.stringify({codice:S.codice,stato:foto})});
+    if(r.ok){ const j=await r.json().catch(()=>null); if(j&&j.aggiornatoIl) S.cond.ultimoVisto=j.aggiornatoIl; }
+  }catch(e){}
+}
+function condCiclo(){
+  clearTimeout(S.cond.timer);
+  if(!S.segui) return;
+  condLeggi().finally(()=>{ if(S.segui) S.cond.timer=setTimeout(condCiclo,COND_OGNI); });
+}
+function condAvvia(){ S.cond.ultimoVisto=null; condCiclo(); }
+function condFerma(){ clearTimeout(S.cond.timer); clearTimeout(S.cond.scrittura); S.cond.timer=null; }
 
 /* ============================================================
    MODALITA' SFONDO
@@ -1056,7 +1172,7 @@ function buildKeys(){
   NOTE.forEach((n,i)=>{
     const b=document.createElement("button");b.className="nk";b.dataset.i=i;
     b.innerHTML=`<b>${n[0]}</b><i>${n[1]}</i>`;
-    b.onclick=()=>{manualeHaPriorita();S.tasto===i?dissolvi():suona(i);};
+    b.onclick=()=>{manualeHaPriorita();S.tasto===i?dissolvi():suona(i);condTocco();};
     w.appendChild(b);
   });
 }
@@ -1069,10 +1185,10 @@ function patch(){
     b.onclick=onclick; w.appendChild(b);
   };
   voce("Worship", S.worship&&!S.usaLib, ()=>{S.worship=true;S.usaLib=false;$("#lib").classList.remove("on");
-    caricaParametriTimbro();patch();if(S.tasto!==null)suona(S.tasto);});
+    caricaParametriTimbro();patch();if(S.tasto!==null)suona(S.tasto);condTocco();});
   TIMBRI.forEach((T,i)=>voce(T.n, i===S.tim&&!S.usaLib&&!S.worship, ()=>{
     S.tim=i;S.usaLib=false;S.worship=false;$("#lib").classList.remove("on");
-    caricaParametriTimbro();patch();if(S.tasto!==null)suona(S.tasto);}));
+    caricaParametriTimbro();patch();if(S.tasto!==null)suona(S.tasto);condTocco();}));
   if(Object.keys(S.lib).length)
     voce("Il tuo set", S.usaLib, ()=>{S.usaLib=true;patch();if(S.tasto!==null)suona(S.tasto);});
 }
@@ -1149,29 +1265,29 @@ $("#power").addEventListener("click",accendi);
 $("#lib").addEventListener("click",()=>{ if(!S.on){accendi();return;} caricaSet(); });
 $$("#mode button").forEach(b=>b.onclick=()=>{
   $$("#mode button").forEach(x=>x.classList.remove("on"));b.classList.add("on");
-  S.min=b.dataset.m==="1";keys();if(S.tasto!==null)suona(S.tasto);});
-$("#rv").addEventListener("input",e=>{S.rv=e.target.value/100;$("#rvV").textContent=e.target.value;
+  S.min=b.dataset.m==="1";keys();if(S.tasto!==null)suona(S.tasto);condTocco();});
+$("#rv").addEventListener("input",e=>{S.rv=e.target.value/100;$("#rvV").textContent=e.target.value;condTocco();
  if(S.wet)S.wet.gain.setTargetAtTime(S.rv,S.ctx.currentTime,.15);});
 $("#br").addEventListener("input",e=>{
   S.baseB=e.target.value/100; $("#brV").textContent=e.target.value;
   if(!S.mov){ S.bright=S.baseB; if(S.voce&&S.voce.brillantezza) S.voce.brillantezza(); }
-  salvaParametriTimbro();});
+  salvaParametriTimbro();condTocco();});
 $("#sh").addEventListener("input",e=>{
   S.baseS=e.target.value/100; $("#shV").textContent=e.target.value;
   if(!S.mov){ S.shimmer=S.baseS; if(S.voce&&S.voce.shimmer) S.voce.shimmer(); }
-  salvaParametriTimbro();});
-$("#mov").addEventListener("click",()=>{ S.mov?fermaMovimento():avviaMovimento(); });
+  salvaParametriTimbro();condTocco();});
+$("#mov").addEventListener("click",()=>{ S.mov?fermaMovimento():avviaMovimento(); condTocco(); });
 $("#mst").addEventListener("input",e=>{
-  S.masterDb=+e.target.value; $("#mstV").textContent=testoDb(S.masterDb);
+  S.masterDb=+e.target.value; $("#mstV").textContent=testoDb(S.masterDb); condTocco();
   applicaMaster(); try{ localStorage.setItem("btlpad.master",String(S.masterDb)); }catch(x){}
 });
 // doppio tocco sul fader: torna a 0 dB, come in Logic
 $("#mst").addEventListener("dblclick",()=>{ const e=$("#mst"); e.value=0; e.dispatchEvent(new Event("input",{bubbles:true})); });
 $("#rileva").addEventListener("click",rilevaUscite);
 $("#uscita").addEventListener("change",e=>applicaUscita(e.target.value));
-$("#fd").addEventListener("input",e=>{S.fade=e.target.value/10;$("#fdV").textContent=S.fade.toFixed(1);});
-$("#stop").onclick=()=>dissolvi();
-$("#panic").onclick=()=>panico();
+$("#fd").addEventListener("input",e=>{S.fade=e.target.value/10;$("#fdV").textContent=S.fade.toFixed(1);condTocco();});
+$("#stop").onclick=()=>{dissolvi();condTocco();};
+$("#panic").onclick=()=>{panico();condTocco();};
 $("#wake").onclick=async()=>{
   const b=$("#wake");
   if(S.wake){try{await S.wake.release();}catch(e){}S.wake=null;b.classList.remove("on");return;}
