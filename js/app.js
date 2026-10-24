@@ -1,6 +1,6 @@
 (function(){
 "use strict";
-const VERSIONE_APP="23";
+const VERSIONE_APP="24";
 
 const NOTE=[["C","Do"],["C#","Do#"],["D","Re"],["D#","Mib"],["E","Mi"],["F","Fa"],
             ["F#","Fa#"],["G","Sol"],["G#","Lab"],["A","La"],["A#","Sib"],["B","Si"]];
@@ -45,7 +45,7 @@ const S={on:false,ctx:null,master:null,padBus:null,fxBus:null,shimBus:null,wet:n
   idBrano:null,manualeSu:null,titolo:"",fallimenti:0,inAttesa:null,
   bright:.5,shimmer:.5,baseB:.5,baseS:.5,mov:false,movTimer:null,movT0:0,
   /* set Worship: i dodici pad costruiti dal riferimento, serviti con l'app */
-  worship:true, wsGrezzi:{}, wsDecod:{}, wsOrdine:[], wsPronto:false,
+  worship:true, wsGrezzi:{}, wsDecod:{}, wsOrdine:[], wsPronto:false, wsPromessa:null, wsAttese:{}, wsCoda:[],
   parWorship:{b:.5,s:.26},      /* come nella v15, il suono che e' piaciuto */
   spegnendo:false,spegniTimer:null,
   parTimbro:TIMBRI.map(T=>({b:.5,s:Math.min(1,T.sh/.62)})),
@@ -697,7 +697,7 @@ function applicaDaLive(t,minore){
   }
   suona(t);                                           // usa la dissolvenza scelta dall'utente
   // ogni canto del live entra chiuso e si apre: movimento acceso, fase riportata all'inizio
-  if(S.mov) S.movT0=Date.now(); else avviaMovimento();
+  if(S.mov) S.movT0=Date.now(); else avviaMovimento(true);
   condTocco();
 }
 
@@ -1058,17 +1058,22 @@ const MOV_AMP_B=.22, MOV_AMP_S=.26;
    apre: il primo picco arriva dopo 12 secondi. */
 const P=(t,periodo,fase=0)=>Math.cos(2*Math.PI*t/periodo+fase);
 function movimentoValori(t){
-  // da chiuso (0) fino al centro impostato, mai oltre: sopra il centro la brillantezza
-  // spinge gli acuti e manda in saturazione
-  const b = S.baseB*.5*(1-(.7*P(t,24)+.3*P(t,8)));
-  const sh= Math.max(0,S.baseS*.5*(1-(.7*P(t,34)+.3*P(t,12))));
-  const apertura = .5-.5*(.72*P(t,24)+.28*P(t,9));          // 0 all'avvio, 1 dopo 12 s
+  // Respira fra meta' e il centro impostato, mai oltre (sopra il centro la
+  // brillantezza spinge gli acuti e manda in saturazione) e MAI fino a zero:
+  // prima l'ingresso partiva "chiuso" (filtro a 420 Hz, brillantezza zero) e
+  // sull'altoparlante di un iPad, che sotto i 300 Hz non emette nulla, il
+  // tappeto arrivato dal live restava muto per secondi. Si vedeva la
+  // tonalita', non si sentiva niente.
+  const onda = (p1,p2)=>.5-.5*(.7*P(t,p1)+.3*P(t,p2));        // 0 all'avvio, 1 a meta' periodo
+  const b = S.baseB*(.55+.45*onda(24,8));
+  const sh= S.baseS*(.45+.55*onda(34,12));
+  const apertura = .42+.58*(.5-.5*(.72*P(t,24)+.28*P(t,9)));  // da ~1,4 kHz a 7 kHz
   const ondeggio = .5-.5*P(t,17);
   return {
     b: Math.max(0,Math.min(1,b)),
     s: Math.max(0,Math.min(1,sh)),
-    taglio: 420*Math.pow(7000/420, apertura),      // da 420 Hz a 7 kHz
-    guadagno: .84+.16*ondeggio,                     // ±0,75 dB circa
+    taglio: 420*Math.pow(7000/420, apertura),
+    guadagno: .9+.1*ondeggio,                       // ±0,45 dB circa
     pan: .32*Math.sin(2*Math.PI*t/38)
   };
 }
@@ -1086,14 +1091,15 @@ function movimentoPasso(){
   if(br){ br.value=Math.round(v.b*100); $("#brV").textContent=br.value; }
   if(sh){ sh.value=Math.round(v.s*100); $("#shV").textContent=sh.value; }
 }
-function avviaMovimento(){
+function avviaMovimento(silenzioso){
   if(!S.on){ accendi(); }
   S.mov=true; S.movT0=Date.now();
   clearInterval(S.movTimer);
   S.movTimer=setInterval(movimentoPasso,MOV_PASSO);
+  movimentoPasso();                                 // subito al valore giusto, non al prossimo passo
   $("#mov").classList.add("on");
   $("#mov").textContent="movimento · attivo";
-  toast("Il tappeto ora respira da solo");
+  if(!silenzioso) toast("Il tappeto ora respira da solo");
 }
 function fermaMovimento(){
   S.mov=false; clearInterval(S.movTimer); S.movTimer=null;
@@ -1120,17 +1126,43 @@ function fermaMovimento(){
 const WS_NOMI=["C","Cs","D","Ds","E","F","Fs","G","Gs","A","As","B"];
 async function worshipScarica(){
   if(S.wsPronto) return;
-  let ok=0;
-  await Promise.all(WS_NOMI.map(async(n,k)=>{
-    try{ const r=await fetch("/pad/"+n+".mp3",{cache:"force-cache"});
-         if(r.ok){ S.wsGrezzi[k]=await r.arrayBuffer(); ok++; } }catch(e){}
-  }));
+  if(S.wsPromessa) return S.wsPromessa;              // gia' in corso: ci si accoda
+  S.wsPromessa=worshipScaricaDavvero();
+  try{ await S.wsPromessa; } finally { S.wsPromessa=null; }
+}
+/* Un file per volta a gruppi di tre, in una coda che si puo' riordinare:
+   quando il live chiede una tonalita', quel file passa davanti. Prima si
+   scaricavano tutti e dodici insieme e si suonava solo alla fine: su una
+   rete lenta il pad restava muto per decine di secondi. */
+function worshipScaricaUno(k){
+  if(S.wsGrezzi[k]) return Promise.resolve(true);
+  if(S.wsAttese[k]) return S.wsAttese[k];
+  S.wsAttese[k]=(async()=>{
+    try{ const r=await fetch("/pad/"+WS_NOMI[k]+".mp3",{cache:"force-cache"});
+         if(r.ok){ S.wsGrezzi[k]=await r.arrayBuffer(); return true; } }catch(e){}
+    return false;
+  })().finally(()=>{ delete S.wsAttese[k]; });
+  return S.wsAttese[k];
+}
+async function worshipScaricaDavvero(){
+  S.wsCoda = WS_NOMI.map((_,k)=>k).filter(k=>!S.wsGrezzi[k]);
+  const operaio=async()=>{ while(S.wsCoda.length){ const k=S.wsCoda.shift(); await worshipScaricaUno(k); } };
+  await Promise.all([operaio(),operaio(),operaio()]);
+  // anche i file chiesti nel frattempo dal live (fuori coda) contano
+  await Promise.all(Object.values(S.wsAttese));
+  const ok=WS_NOMI.filter((_,k)=>S.wsGrezzi[k]).length;
   S.wsPronto = ok===12;
   if(!S.wsPronto && ok>0) toast("Set Worship incompleto: "+ok+" tonalità su 12");
   if(ok===0){ S.worship=false; patch(); toast("Set Worship non disponibile: uso la sintesi"); }
 }
 async function worshipBuffer(k){
   if(S.wsDecod[k]) { S.wsOrdine=S.wsOrdine.filter(x=>x!==k); S.wsOrdine.push(k); return S.wsDecod[k]; }
+  if(!S.wsGrezzi[k]){
+    // La tonalita' chiesta passa davanti a tutte le altre: si suona appena
+    // c'e' quel file, non quando e' arrivato l'intero set.
+    S.wsCoda = (S.wsCoda||[]).filter(x=>x!==k);
+    if(!(await worshipScaricaUno(k))) return null;
+  }
   const grezzo=S.wsGrezzi[k]; if(!grezzo) return null;
   const b=await S.ctx.decodeAudioData(grezzo.slice(0));
   S.wsDecod[k]=b; S.wsOrdine.push(k);
@@ -1330,6 +1362,10 @@ buildKeys();patch();tabs();grid();mix();keys();diag();caricaParametriTimbro();ri
   setTimeout(via,2800);
   sp.addEventListener("click",via);          // saltabile con un tocco
 })();
+
+/* ---- diagnostica (sola lettura): la usano le prove automatiche ---- */
+window.__btlpadDiag=()=>({ on:S.on, tasto:S.tasto, voce:!!S.voce, mov:S.mov, bright:S.bright, baseB:S.baseB,
+  worship:S.worship, wsPronto:S.wsPronto, segui:S.segui, movimento:movimentoValori(0) });
 
 })();
 
